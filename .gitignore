@@ -1,0 +1,21 @@
+# Environment and secret files
+.env
+*.env
+.env.*
+backend/.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+*.sqlite3
+db.sqlite3
+
+# Node & Build
+node_modules/
+dist/
+.DS_Store
+*.log

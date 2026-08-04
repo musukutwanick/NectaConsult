@@ -1,0 +1,22 @@
+{
+  "name": "nectaconsult",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently \"vite\" \".venv\\Scripts\\python.exe backend/manage.py runserver\"",
+    "dev:frontend": "vite",
+    "dev:backend": ".venv\\Scripts\\python.exe backend/manage.py runserver",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "concurrently": "^10.0.3",
+    "vite": "^5.4.2"
+  }
+}
