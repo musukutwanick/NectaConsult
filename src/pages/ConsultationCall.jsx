@@ -76,10 +76,77 @@ export default function ConsultationCall({ role, token, patientName, doctorName,
 
 
 
-  // Audio recording refs
+  // Audio recording handlers & refs
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const recordingStreamRef = useRef(null);
+
+  async function startAudioRecording() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      recordingStreamRef.current = stream;
+      audioChunksRef.current = [];
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecordDuration(0);
+      recordTimerRef.current = setInterval(() => {
+        setRecordDuration(prev => prev + 1);
+      }, 1000);
+    } catch (err) {
+      console.warn("Audio recording failed to start", err);
+      alert("Microphone access is unavailable or denied.");
+    }
+  }
+
+  function stopAndSendAudio() {
+    if (recordTimerRef.current) clearInterval(recordTimerRef.current);
+    const sec = recordDuration;
+    setIsRecording(false);
+    setRecordDuration(0);
+
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.onstop = async () => {
+        if (recordingStreamRef.current) {
+          try { recordingStreamRef.current.getTracks().forEach(t => t.stop()); } catch(e){}
+        }
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const reader = new FileReader();
+        reader.onload = async () => {
+          if (!threadId) return;
+          try {
+            const msgBody = `[AUDIO] Voice note (${sec}s)`;
+            const msg = await api.sendMessage(token, threadId, msgBody);
+            setMessages(prev => (prev.some(m => m.id === msg.id) ? prev : [...prev, msg]));
+          } catch(e) {
+            console.error("Failed to send audio message", e);
+          }
+        };
+        reader.readAsDataURL(audioBlob);
+      };
+      try { mediaRecorderRef.current.stop(); } catch(e){}
+    }
+  }
+
+  function cancelAudioRecording() {
+    if (recordTimerRef.current) clearInterval(recordTimerRef.current);
+    setIsRecording(false);
+    setRecordDuration(0);
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      try { mediaRecorderRef.current.stop(); } catch(e){}
+    }
+    if (recordingStreamRef.current) {
+      try { recordingStreamRef.current.getTracks().forEach(t => t.stop()); } catch(e){}
+    }
+  }
 
   // Audio cleanup
   useEffect(() => {
@@ -88,6 +155,9 @@ export default function ConsultationCall({ role, token, patientName, doctorName,
         try {
           activeAudioRef.current.pause();
         } catch (e) {}
+      }
+      if (recordTimerRef.current) {
+        clearInterval(recordTimerRef.current);
       }
       if (recordingStreamRef.current) {
         try {
@@ -280,11 +350,15 @@ export default function ConsultationCall({ role, token, patientName, doctorName,
       
       let micStream;
       try {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          alert('Microphone access requires a Secure Context (HTTPS or localhost). Please ensure you are connecting via https://' + window.location.host);
+          return;
+        }
         micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
         recordingStreamRef.current = micStream;
       } catch (err) {
         console.warn('Microphone stream access denied', err);
-        alert('Microphone access is required to record voice messages. Please check your browser permissions.');
+        alert('Microphone access was denied or unavailable. Please grant microphone permissions in your browser address bar settings.');
         return;
       }
 
@@ -471,23 +545,86 @@ export default function ConsultationCall({ role, token, patientName, doctorName,
     }
   }
 
+  async function handleOpenPrescriptionModal(prescId, fallbackObj) {
+    if (prescId && api.getPrescriptions) {
+      try {
+        const allRx = await api.getPrescriptions(token);
+        const match = Array.isArray(allRx) ? allRx.find(p => String(p.id) === String(prescId)) : null;
+        if (match) {
+          setActiveViewPrescription(match);
+          return;
+        }
+      } catch (err) {
+        console.warn('Could not fetch prescription from API:', err);
+      }
+    }
+    setActiveViewPrescription(fallbackObj);
+  }
+
+  // Image upload progress states
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadStatusMsg, setUploadStatusMsg] = useState('');
 
   async function handleImageUpload(e) {
     const file = e.target.files?.[0];
     if (!file || !threadId) return;
 
+    setIsUploadingImage(true);
+    setUploadProgress(15);
+    setUploadStatusMsg(`Reading ${file.name}...`);
+
     const reader = new FileReader();
+    reader.onprogress = (evt) => {
+      if (evt.lengthComputable) {
+        const percent = Math.round((evt.loaded / evt.total) * 60);
+        setUploadProgress(percent);
+      }
+    };
     reader.onload = async () => {
+      setUploadProgress(75);
+      setUploadStatusMsg('Sending photo to room...');
       try {
         const base64Data = reader.result;
         const msg = await api.sendMessage(token, threadId, `[IMAGE] ${base64Data}`);
         setMessages(prev => (prev.some(m => m.id === msg.id) ? prev : [...prev, msg]));
+        setUploadProgress(100);
+        setUploadStatusMsg('Photo sent!');
       } catch (err) {
         console.error('Failed to send image', err);
+      } finally {
+        setTimeout(() => {
+          setIsUploadingImage(false);
+          setUploadProgress(0);
+          setUploadStatusMsg('');
+        }, 500);
       }
     };
     reader.readAsDataURL(file);
     e.target.value = '';
+  }
+
+  async function handleCameraPhotoSend(capturedBase64) {
+    if (!threadId) return;
+    setIsUploadingImage(true);
+    setUploadProgress(40);
+    setUploadStatusMsg('Processing camera photo...');
+    try {
+      setUploadProgress(75);
+      setUploadStatusMsg('Sending photo to room...');
+      const msg = await api.sendMessage(token, threadId, `[IMAGE] ${capturedBase64}`);
+      setMessages(prev => (prev.some(m => m.id === msg.id) ? prev : [...prev, msg]));
+      setUploadProgress(100);
+      setUploadStatusMsg('Photo sent!');
+    } catch (err) {
+      console.error('Failed to send camera photo', err);
+    } finally {
+      setTimeout(() => {
+        setIsUploadingImage(false);
+        setUploadProgress(0);
+        setUploadStatusMsg('');
+      }, 500);
+    }
   }
 
   const formatDuration = (sec) => {
@@ -784,7 +921,7 @@ export default function ConsultationCall({ role, token, patientName, doctorName,
                           </div>
                           <button
                             type="button"
-                            onClick={() => setActiveViewPrescription(prescObj)}
+                            onClick={() => handleOpenPrescriptionModal(prescId, prescObj)}
                             style={{
                               background: '#10b981', color: 'white', border: 'none', padding: '6px 10px',
                               borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer',
@@ -843,6 +980,36 @@ export default function ConsultationCall({ role, token, patientName, doctorName,
               </div>
             );
           })}
+          {/* Image Upload Loading Progress Banner */}
+          {isUploadingImage && (
+            <div style={{
+              margin: '8px 12px',
+              padding: '10px 14px',
+              background: isDarkMode ? 'rgba(2, 132, 199, 0.15)' : 'rgba(2, 132, 199, 0.06)',
+              border: isDarkMode ? '1px solid rgba(2, 132, 199, 0.4)' : '1px solid rgba(2, 132, 199, 0.2)',
+              borderRadius: '10px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '6px'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12.5px', fontWeight: '700', color: '#0284c7' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <i className="fa-solid fa-spinner fa-spin" style={{ color: '#0284c7' }}></i>
+                  {uploadStatusMsg || 'Uploading Image...'}
+                </span>
+                <span>{uploadProgress}%</span>
+              </div>
+              <div style={{ width: '100%', height: '6px', background: 'rgba(2, 132, 199, 0.15)', borderRadius: '999px', overflow: 'hidden' }}>
+                <div style={{
+                  width: `${uploadProgress}%`,
+                  height: '100%',
+                  background: 'linear-gradient(90deg, #0284c7, #38bdf8)',
+                  borderRadius: '999px',
+                  transition: 'width 0.25s ease-out'
+                }} />
+              </div>
+            </div>
+          )}
 
           <div ref={messagesEndRef} />
         </div>
@@ -884,9 +1051,9 @@ export default function ConsultationCall({ role, token, patientName, doctorName,
                     background: '#f27224', color: 'white', border: 'none',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     cursor: 'pointer', fontSize: '15px', transition: 'background 0.2s',
-                    boxShadow: '0 4px 12px rgba(242, 114, 36, 0.25)', flexShrink: 0
+                    boxShadow: '0 4px 10px rgba(242, 114, 36, 0.3)', flexShrink: 0
                   }}
-                  title="Give Prescription"
+                  title="Give Digital Prescription"
                 >
                   <i className="fa-solid fa-file-prescription"></i>
                 </button>
@@ -894,43 +1061,43 @@ export default function ConsultationCall({ role, token, patientName, doctorName,
 
               {/* Audio Recording display status */}
               {isRecording ? (
-                <div style={{ 
-                  flex: 1, 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: '10px', 
-                  background: isDarkMode ? '#090d16' : '#f0f2f5', 
-                  padding: '10px 14px', 
-                  borderRadius: '20px' 
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: '12px', flex: 1,
+                  background: isDarkMode ? '#2d1215' : '#fef2f2',
+                  border: isDarkMode ? '1px solid #7f1d1d' : '1px solid #fee2e2',
+                  borderRadius: '24px', padding: '8px 16px'
                 }}>
-                  <span style={{
-                    display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%',
-                    background: '#ef4444', animation: 'pulse 1s infinite'
-                  }}></span>
-                  <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#ef4444', flex: 1 }}>
-                    Recording ({formatDuration(recordDuration)})
-                  </span>
-                  <button 
-                    type="button" 
-                    onClick={() => setIsRecording(false)}
-                    style={{ background: 'transparent', border: 'none', color: isDarkMode ? '#94a3b8' : '#64748b', cursor: 'pointer', fontSize: '11px' }}
-                  >
-                    <i className="fa-solid fa-trash-can"></i> Discard
-                  </button>
+                  <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#ef4444', display: 'inline-block', animation: 'pulse 1s infinite' }}></span>
+                  <span style={{ color: '#ef4444', fontWeight: 'bold', fontSize: '13.5px' }}>Recording voice note... {formatDuration(recordDuration)}</span>
+                  <div style={{ marginLeft: 'auto', display: 'flex', gap: '6px' }}>
+                    <button type="button" style={{ background: '#64748b', color: 'white', border: 'none', borderRadius: '16px', padding: '4px 12px', fontSize: '12px', cursor: 'pointer', fontWeight: 'bold' }} onClick={cancelAudioRecording}>Cancel</button>
+                    <button type="button" style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: '16px', padding: '4px 12px', fontSize: '12px', cursor: 'pointer', fontWeight: 'bold' }} onClick={stopAndSendAudio}>Send</button>
+                  </div>
                 </div>
               ) : (
-                <form onSubmit={handleSendMessage} style={{ flex: 1, display: 'flex', gap: '10px', alignItems: 'center' }}>
-                  {/* Attachment Button & Popover */}
-                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                <form onSubmit={handleSendMessage} style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+                  <button
+                    type="button"
+                    title="Record Voice Note"
+                    onClick={startAudioRecording}
+                    style={{
+                      background: 'none', border: 'none', color: isDarkMode ? '#94a3b8' : '#54656f',
+                      fontSize: '18px', cursor: 'pointer', padding: '6px', borderRadius: '50%',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
+                    }}
+                  >
+                    <i className="fa-solid fa-microphone"></i>
+                  </button>
+                  <div style={{ position: 'relative' }}>
                     <button
                       type="button"
+                      title="Attach Image / Document"
                       onClick={() => setShowAttachMenu(!showAttachMenu)}
                       style={{
-                        background: 'none', border: 'none', color: isDarkMode ? '#94a3b8' : '#64748b',
-                        fontSize: '18px', cursor: 'pointer', padding: '0 4px', display: 'flex', alignItems: 'center',
-                        flexShrink: 0
+                        background: 'none', border: 'none', color: isDarkMode ? '#94a3b8' : '#54656f',
+                        fontSize: '18px', cursor: 'pointer', padding: '6px', borderRadius: '50%',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
                       }}
-                      title="Attach Photo or File"
                     >
                       <i className="fa-solid fa-paperclip"></i>
                     </button>
@@ -940,12 +1107,12 @@ export default function ConsultationCall({ role, token, patientName, doctorName,
                           position: 'absolute',
                           bottom: '45px',
                           left: '0',
-                          background: isDarkMode ? '#1e293b' : '#ffffff',
+                          background: isDarkMode ? '#1e293b' : 'white',
                           border: isDarkMode ? '1px solid #334155' : '1px solid #e2e8f0',
                           borderRadius: '12px',
-                          boxShadow: '0 10px 25px rgba(0,0,0,0.25)',
+                          boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
                           padding: '6px',
-                          zIndex: 1000,
+                          zIndex: 100,
                           display: 'flex',
                           flexDirection: 'column',
                           gap: '4px',
@@ -993,15 +1160,7 @@ export default function ConsultationCall({ role, token, patientName, doctorName,
                   <CameraModal
                     isOpen={isCameraOpen}
                     onClose={() => setIsCameraOpen(false)}
-                    onCapture={async (capturedBase64) => {
-                      if (!threadId) return;
-                      try {
-                        const msg = await api.sendMessage(token, threadId, `[IMAGE] ${capturedBase64}`);
-                        setMessages(prev => (prev.some(m => m.id === msg.id) ? prev : [...prev, msg]));
-                      } catch (err) {
-                        console.error('Failed to send camera photo', err);
-                      }
-                    }}
+                    onCapture={handleCameraPhotoSend}
                   />
 
                   <input

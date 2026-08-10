@@ -1,21 +1,56 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { api } from '../api';
 
 export default function Register({ onBackToLogin, onRegisterSuccess }) {
-  const [form, setForm] = useState({
-    password: '',
-    confirmPassword: '',
-    email: '',
-    medical_aid_number: '',
-    first_name: '',
-    last_name: '',
-    date_of_birth: '',
-    phone: '',
-    address: '',
+  const [form, setForm] = useState(() => {
+    try {
+      const saved = window.localStorage.getItem('nectaconsult-register-form');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return {
+      password: '',
+      confirmPassword: '',
+      email: '',
+      medical_aid_number: '',
+      first_name: '',
+      last_name: '',
+      date_of_birth: '',
+      phone: '',
+      address: '',
+    };
   });
+
   const [loading, setLoading] = useState(false);
   const [searching, setSearching] = useState(false);
-  const [foundMember, setFoundMember] = useState(false);
+  const [foundMember, setFoundMember] = useState(() => {
+    return window.localStorage.getItem('nectaconsult-register-found') === 'true';
+  });
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('nectaconsult-register-form', JSON.stringify(form));
+    } catch {}
+  }, [form]);
+
+  useEffect(() => {
+    if (foundMember) {
+      window.localStorage.setItem('nectaconsult-register-found', 'true');
+    } else {
+      window.localStorage.removeItem('nectaconsult-register-found');
+    }
+  }, [foundMember]);
+
+  const clearRegisterStorage = () => {
+    window.localStorage.removeItem('nectaconsult-register-form');
+    window.localStorage.removeItem('nectaconsult-register-found');
+    window.localStorage.removeItem('nectaconsult-is-registering');
+  };
+
+  const handleBackToLogin = () => {
+    clearRegisterStorage();
+    onBackToLogin();
+  };
+
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [showPw, setShowPw] = useState(false);
@@ -81,9 +116,10 @@ export default function Register({ onBackToLogin, onRegisterSuccess }) {
         password: form.password,
         email: form.email,
       });
+      clearRegisterStorage();
       setSuccessMsg('Registration successful! Redirecting to login page to sign in...');
       setTimeout(() => {
-        onBackToLogin();
+        handleBackToLogin();
       }, 2500);
     } catch (requestError) {
       setError(requestError.message);
@@ -312,7 +348,7 @@ export default function Register({ onBackToLogin, onRegisterSuccess }) {
 
           <p className="auth2-switch">
             Already have an account?{' '}
-            <button type="button" className="auth2-switch-btn" onClick={onBackToLogin}>
+            <button type="button" className="auth2-switch-btn" onClick={handleBackToLogin}>
               Sign in
             </button>
           </p>

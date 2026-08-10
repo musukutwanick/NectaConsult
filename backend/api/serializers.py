@@ -57,6 +57,23 @@ class PrescriptionSerializer(serializers.ModelSerializer):
     doctor_id = serializers.IntegerField(source='doctor.id', read_only=True)
     appointment = serializers.PrimaryKeyRelatedField(queryset=Appointment.objects.all(), required=False, allow_null=True)
 
+    doctor_registration_number = serializers.SerializerMethodField()
+    doctor_qualifications = serializers.SerializerMethodField()
+    doctor_address = serializers.SerializerMethodField()
+    doctor_signature = serializers.SerializerMethodField()
+
+    def get_doctor_registration_number(self, obj):
+        return obj.doctor_registration_number or (obj.doctor.doctor_registration_number if obj.doctor else '')
+
+    def get_doctor_qualifications(self, obj):
+        return obj.doctor_qualifications or (obj.doctor.doctor_qualifications if obj.doctor else '')
+
+    def get_doctor_address(self, obj):
+        return obj.doctor_address or (obj.doctor.clinic_address if obj.doctor else '')
+
+    def get_doctor_signature(self, obj):
+        return obj.doctor_signature or (obj.doctor.signature_data if obj.doctor else '')
+
     class Meta:
         model = Prescription
         fields = [

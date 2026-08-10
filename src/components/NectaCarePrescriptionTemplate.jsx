@@ -25,6 +25,8 @@ export default function NectaCarePrescriptionTemplate({ prescription, patient, d
 
   const doctorName = doctor?.title || doctor?.user?.full_name || prescription?.doctor_name || '';
   const doctorRegNum = doctor?.doctor_registration_number || prescription?.doctor_registration_number || '';
+  const doctorQualifications = doctor?.doctor_qualifications || prescription?.doctor_qualifications || '';
+  const doctorAddress = doctor?.clinic_address || prescription?.doctor_address || prescription?.clinic_address || '';
   const doctorSignature = doctor?.signature_data || prescription?.doctor_signature || '';
   const dateStr = prescription?.created_at ? new Date(prescription.created_at).toLocaleDateString('en-GB') : new Date().toLocaleDateString('en-GB');
 
@@ -58,18 +60,7 @@ export default function NectaCarePrescriptionTemplate({ prescription, patient, d
     bgImg.onload = () => {
       // 1. Draw background template
       ctx.drawImage(bgImg, 0, 0, W, H);
-
-      // Draw official NectaCare (Pvt) Ltd logo on top-left
-      const logoImg = new Image();
-      logoImg.crossOrigin = 'anonymous';
-      logoImg.src = '/nectacare-logo.png';
-      logoImg.onload = () => {
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(35, 30, 235, 175);
-        ctx.drawImage(logoImg, 38, 32, 230, 170);
-        renderTextAndDownload();
-      };
-      logoImg.onerror = () => renderTextAndDownload();
+      renderTextAndDownload();
 
       function renderTextAndDownload() {
         ctx.fillStyle = '#0F172A';
@@ -114,10 +105,27 @@ export default function NectaCarePrescriptionTemplate({ prescription, patient, d
         ctx.fillText(dateStr, 440, 840);
         ctx.textAlign = 'left';
 
-        // 7. Doctor Name ONLY (Non-bold, aligned)
+        // 7. Doctor Details Block (Name, Qualifications under name, Address below qualifications)
         ctx.fillStyle = '#0F172A';
-        ctx.font = '500 14px "Inter", sans-serif';
-        ctx.fillText(doctorName, 185, 902);
+        ctx.textAlign = 'left';
+        let docY = 890;
+
+        ctx.font = '600 13px "Inter", sans-serif';
+        ctx.fillText(doctorName || 'Doctor', 185, docY);
+
+        if (doctorQualifications) {
+          docY += 16;
+          ctx.font = '500 11px "Inter", sans-serif';
+          ctx.fillStyle = '#334155';
+          ctx.fillText(doctorQualifications, 185, docY);
+        }
+
+        if (doctorAddress) {
+          docY += 15;
+          ctx.font = '400 10px "Inter", sans-serif';
+          ctx.fillStyle = '#475569';
+          ctx.fillText(doctorAddress, 185, docY);
+        }
 
         // 8. Doctor Signature
         if (doctorSignature && doctorSignature.startsWith('data:image')) {
@@ -278,12 +286,27 @@ export default function NectaCarePrescriptionTemplate({ prescription, patient, d
             {dateStr}
           </div>
 
-          {/* 8. Doctor Name ONLY (Non-bold, aligned) */}
+          {/* 8. Doctor Details Block (Name, Qualifications under name, Address below qualifications) */}
           <div style={{
-            position: 'absolute', top: '84.8%', left: '25.0%', width: '68.5%', height: '7.0%',
-            display: 'flex', alignItems: 'center', fontWeight: '500', fontSize: '11.5px', color: '#0F172A'
+            position: 'absolute', top: '84.8%', left: '25.0%', width: '68.5%', height: '12.0%',
+            display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', color: '#0F172A',
+            textAlign: 'left'
           }}>
-            {doctorName}
+            <div style={{ fontWeight: '600', fontSize: '11.5px', color: '#0F172A', lineHeight: '1.2' }}>
+              {doctorName || 'Doctor'}
+            </div>
+
+            {doctorQualifications ? (
+              <div style={{ fontWeight: '500', fontSize: '10.5px', color: '#334155', marginTop: '2px', lineHeight: '1.2' }}>
+                {doctorQualifications}
+              </div>
+            ) : null}
+
+            {doctorAddress ? (
+              <div style={{ fontWeight: '400', fontSize: '10px', color: '#475569', marginTop: '2px', lineHeight: '1.2' }}>
+                {doctorAddress}
+              </div>
+            ) : null}
           </div>
         </div>
 

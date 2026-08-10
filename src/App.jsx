@@ -97,7 +97,23 @@ const demoAccounts = [
 ];
 
 function App() {
-  const [token, setToken] = useState(() => window.localStorage.getItem('nectaconsult-token') || '');
+  const TEN_MINUTES_MS = 10 * 60 * 1000;
+
+  const [token, setToken] = useState(() => {
+    const savedToken = window.localStorage.getItem('nectaconsult-token') || window.sessionStorage.getItem('nectaconsult-token') || '';
+    const lastActiveStr = window.localStorage.getItem('nectaconsult-last-activity');
+    if (savedToken && lastActiveStr) {
+      const lastActive = parseInt(lastActiveStr, 10);
+      if (Date.now() - lastActive > TEN_MINUTES_MS) {
+        window.localStorage.removeItem('nectaconsult-token');
+        window.sessionStorage.removeItem('nectaconsult-token');
+        window.localStorage.removeItem('nectaconsult-last-activity');
+        return '';
+      }
+    }
+    return savedToken;
+  });
+
   const [dashboard, setDashboard] = useState(null);
   const [loading, setLoading] = useState(Boolean(token));
   const [error, setError] = useState('');
@@ -115,15 +131,95 @@ function App() {
       });
     }, 4000);
   };
-  const [loginForm, setLoginForm] = useState({ username: '', password: '' });
-  const [isRegistering, setIsRegistering] = useState(false);
+
+  // 10-Minute Inactivity Auto-Logout Manager
+  useEffect(() => {
+    if (!token) return;
+
+    let inactivityTimer = null;
+    let throttleTimer = null;
+
+    const resetInactivityTimer = () => {
+      window.localStorage.setItem('nectaconsult-last-activity', Date.now().toString());
+      if (inactivityTimer) clearTimeout(inactivityTimer);
+      inactivityTimer = setTimeout(() => {
+        handleLogout();
+        showToast('You have been logged out due to 10 minutes of inactivity.', 'error');
+      }, TEN_MINUTES_MS);
+    };
+
+    resetInactivityTimer();
+
+    const onUserActivity = () => {
+      if (!throttleTimer) {
+        throttleTimer = setTimeout(() => {
+          throttleTimer = null;
+          resetInactivityTimer();
+        }, 1000);
+      }
+    };
+
+    const events = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'click'];
+    events.forEach((evt) => window.addEventListener(evt, onUserActivity, { passive: true }));
+
+    return () => {
+      if (inactivityTimer) clearTimeout(inactivityTimer);
+      if (throttleTimer) clearTimeout(throttleTimer);
+      events.forEach((evt) => window.removeEventListener(evt, onUserActivity));
+    };
+  }, [token]);
+  const [loginForm, setLoginForm] = useState(() => {
+    try {
+      const pending = window.localStorage.getItem('nectaconsult-pending-otp');
+      if (pending) {
+        const parsed = JSON.parse(pending);
+        if (parsed && parsed.username) return { username: parsed.username, password: '' };
+      }
+    } catch {}
+    return { username: '', password: '' };
+  });
+
+  const [isRegistering, setIsRegistering] = useState(() => {
+    return window.localStorage.getItem('nectaconsult-is-registering') === 'true';
+  });
+
+  const updateIsRegistering = (val) => {
+    setIsRegistering(val);
+    if (val) {
+      window.localStorage.setItem('nectaconsult-is-registering', 'true');
+    } else {
+      window.localStorage.removeItem('nectaconsult-is-registering');
+    }
+  };
+
   const [currentTab, setCurrentTab] = useState('');
   const [isCalling, setIsCalling] = useState(false);
   const [callInfo, setCallInfo] = useState(null);
   const [notifications, setNotifications] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
-  const [otpRequired, setOtpRequired] = useState(false);
-  const [otpEmail, setOtpEmail] = useState('');
+
+  const [otpRequired, setOtpRequired] = useState(() => {
+    try {
+      const pending = window.localStorage.getItem('nectaconsult-pending-otp');
+      if (pending) {
+        const parsed = JSON.parse(pending);
+        return Boolean(parsed && parsed.otpRequired);
+      }
+    } catch {}
+    return false;
+  });
+
+  const [otpEmail, setOtpEmail] = useState(() => {
+    try {
+      const pending = window.localStorage.getItem('nectaconsult-pending-otp');
+      if (pending) {
+        const parsed = JSON.parse(pending);
+        return (parsed && parsed.otpEmail) || '';
+      }
+    } catch {}
+    return '';
+  });
+
   const [otpCode, setOtpCode] = useState('');
   const [resendLoading, setResendLoading] = useState(false);
   const [resendMsg, setResendMsg] = useState('');
@@ -201,6 +297,8 @@ function App() {
         setForcePasswordChangeUsername(data.user.user.username);
         setToken('');
         window.localStorage.removeItem('nectaconsult-token');
+        window.sessionStorage.removeItem('nectaconsult-token');
+        window.localStorage.removeItem('nectaconsult-last-activity');
         setDashboard(null);
         setLoading(false);
         return;
@@ -221,6 +319,8 @@ function App() {
       setDashboard(null);
       setToken('');
       window.localStorage.removeItem('nectaconsult-token');
+      window.sessionStorage.removeItem('nectaconsult-token');
+      window.localStorage.removeItem('nectaconsult-last-activity');
       setError(requestError.message);
     } finally {
       setLoading(false);
@@ -259,11 +359,21 @@ function App() {
         setOtpRequired(true);
         setOtpEmail(response.email);
         setOtpCode('');
+        try {
+          window.localStorage.setItem('nectaconsult-pending-otp', JSON.stringify({
+            otpRequired: true,
+            otpEmail: response.email,
+            username: loginForm.username
+          }));
+        } catch {}
       } else if (response.change_password_required) {
         setForcePasswordChangeUsername(loginForm.username);
       } else {
         setToken(response.token);
+        window.localStorage.setItem('nectaconsult-token', response.token);
         window.sessionStorage.setItem('nectaconsult-token', response.token);
+        window.localStorage.setItem('nectaconsult-last-activity', Date.now().toString());
+        window.localStorage.removeItem('nectaconsult-pending-otp');
         setDashboard(null);
         await loadDashboard(response.token);
       }
@@ -298,7 +408,11 @@ function App() {
     try {
       const response = await api.verifyOtp(loginForm.username, otpCode);
       setToken(response.token);
+      window.localStorage.setItem('nectaconsult-token', response.token);
       window.sessionStorage.setItem('nectaconsult-token', response.token);
+      window.localStorage.setItem('nectaconsult-last-activity', Date.now().toString());
+      window.localStorage.removeItem('nectaconsult-pending-otp');
+      window.localStorage.removeItem('nectaconsult-is-registering');
       setOtpRequired(false);
       setOtpCode('');
       setDashboard(null);
@@ -338,13 +452,17 @@ function App() {
     setLoginForm({ username: '', password: '' });
     setOtpRequired(false);
     setOtpCode('');
+    updateIsRegistering(false);
     window.sessionStorage.removeItem('nectaconsult-token');
     window.localStorage.removeItem('nectaconsult-token');
+    window.localStorage.removeItem('nectaconsult-last-activity');
+    window.localStorage.removeItem('nectaconsult-pending-otp');
+    window.localStorage.removeItem('nectaconsult-is-registering');
   }
 
 
   function handleRegisterSuccess() {
-    setIsRegistering(false);
+    updateIsRegistering(false);
     setShowLanding(false);
   }
 
@@ -357,14 +475,14 @@ function App() {
   if (isRegistering) {
     innerScreen = (
       <Register
-        onBackToLogin={() => { setIsRegistering(false); setShowLanding(false); }}
+        onBackToLogin={() => { updateIsRegistering(false); setShowLanding(false); }}
         onRegisterSuccess={handleRegisterSuccess}
       />
     );
   } else if (!dashboard && showLanding) {
     innerScreen = (
       <LandingPage
-        onGetStarted={() => { setShowLanding(false); setIsRegistering(true); }}
+        onGetStarted={() => { setShowLanding(false); updateIsRegistering(true); }}
         onLogin={() => { setShowLanding(false); }}
       />
     );
@@ -387,7 +505,12 @@ function App() {
           onChangeOtpCode={setOtpCode}
           error={error}
           onSubmit={handleOtpVerifySubmit}
-          onCancel={() => { setOtpRequired(false); setError(''); setResendMsg(''); }}
+          onCancel={() => {
+            setOtpRequired(false);
+            setError('');
+            setResendMsg('');
+            window.localStorage.removeItem('nectaconsult-pending-otp');
+          }}
           onResend={handleResendOtp}
           resendLoading={resendLoading}
           resendMsg={resendMsg}
@@ -404,7 +527,7 @@ function App() {
           onChange={setLoginForm}
           loading={loading}
           onQuickFill={(account) => setLoginForm({ username: account.username, password: account.password })}
-          onToggleRegister={() => setIsRegistering(true)}
+          onToggleRegister={() => updateIsRegistering(true)}
           onBackToLanding={() => setShowLanding(true)}
           onForgotPassword={() => {
             setShowResetModal(true);
@@ -2220,6 +2343,11 @@ function ChatPanel({ title, subtitle, messages, draft, setDraft, onSend, current
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [selectedImagePreview, setSelectedImagePreview] = useState(null);
 
+  // Image upload progress state
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadStatusMsg, setUploadStatusMsg] = useState('');
+
   function startRecording() {
     setIsRecording(true);
     setRecordingSec(0);
@@ -2242,16 +2370,63 @@ function ChatPanel({ title, subtitle, messages, draft, setDraft, onSend, current
       alert('Please select an image file.');
       return;
     }
-    if (file.size > 2 * 1024 * 1024) {
-      alert('Image file is too large. Please select an image under 2MB.');
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Image file is too large. Please select an image under 5MB.');
       return;
     }
+
+    setIsUploadingImage(true);
+    setUploadProgress(15);
+    setUploadStatusMsg(`Reading ${file.name}...`);
+
     const reader = new FileReader();
-    reader.onload = () => {
-      onSend(null, `[IMAGE] ${reader.result}`);
+    reader.onprogress = (evt) => {
+      if (evt.lengthComputable) {
+        const percent = Math.round((evt.loaded / evt.total) * 60);
+        setUploadProgress(percent);
+      }
+    };
+
+    reader.onload = async () => {
+      setUploadProgress(75);
+      setUploadStatusMsg('Sending photo to server...');
+      try {
+        await onSend(null, `[IMAGE] ${reader.result}`);
+        setUploadProgress(100);
+        setUploadStatusMsg('Photo sent!');
+      } catch (err) {
+        console.error("Image upload error", err);
+      } finally {
+        setTimeout(() => {
+          setIsUploadingImage(false);
+          setUploadProgress(0);
+          setUploadStatusMsg('');
+        }, 500);
+      }
     };
     reader.readAsDataURL(file);
     e.target.value = '';
+  }
+
+  async function handleCameraPhotoSend(capturedBase64) {
+    setIsUploadingImage(true);
+    setUploadProgress(40);
+    setUploadStatusMsg('Processing photo...');
+    try {
+      setUploadProgress(75);
+      setUploadStatusMsg('Sending photo to server...');
+      await onSend(null, `[IMAGE] ${capturedBase64}`);
+      setUploadProgress(100);
+      setUploadStatusMsg('Photo sent!');
+    } catch (err) {
+      console.error("Camera photo upload error", err);
+    } finally {
+      setTimeout(() => {
+        setIsUploadingImage(false);
+        setUploadProgress(0);
+        setUploadStatusMsg('');
+      }, 500);
+    }
   }
 
   function handleSendPrescription(e) {
@@ -2333,6 +2508,37 @@ function ChatPanel({ title, subtitle, messages, draft, setDraft, onSend, current
           </div>
         ))}
       </div>
+
+      {/* Image Upload Loading Progress Banner */}
+      {isUploadingImage && (
+        <div style={{
+          margin: '8px 16px',
+          padding: '10px 14px',
+          background: 'rgba(2, 132, 199, 0.06)',
+          border: '1px solid rgba(2, 132, 199, 0.2)',
+          borderRadius: '10px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '6px'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12.5px', fontWeight: '700', color: '#0284c7' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <i className="fa-solid fa-spinner fa-spin" style={{ color: '#0284c7' }}></i>
+              {uploadStatusMsg || 'Uploading Image...'}
+            </span>
+            <span>{uploadProgress}%</span>
+          </div>
+          <div style={{ width: '100%', height: '6px', background: 'rgba(2, 132, 199, 0.15)', borderRadius: '999px', overflow: 'hidden' }}>
+            <div style={{
+              width: `${uploadProgress}%`,
+              height: '100%',
+              background: 'linear-gradient(90deg, #0284c7, #38bdf8)',
+              borderRadius: '999px',
+              transition: 'width 0.25s ease-out'
+            }} />
+          </div>
+        </div>
+      )}
 
       {showRxForm && (
         <form onSubmit={handleSendPrescription} className="inline-prescription-editor">
@@ -2461,9 +2667,7 @@ function ChatPanel({ title, subtitle, messages, draft, setDraft, onSend, current
                 <CameraModal
                   isOpen={isCameraOpen}
                   onClose={() => setIsCameraOpen(false)}
-                  onCapture={(capturedBase64) => {
-                    onSend(null, `[IMAGE] ${capturedBase64}`);
-                  }}
+                  onCapture={handleCameraPhotoSend}
                 />
                 {currentUserRole === 'doctor' && (
                   <button

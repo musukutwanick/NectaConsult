@@ -215,7 +215,7 @@ export default function SysAdminDashboard({ token, onLogout, DashboardHeader, sh
     setSuccessMsg('');
     try {
       await api.sysadminCreateUser(token, createUserForm);
-      const msg = `Successfully registered new user: ${createUserForm.username}`;
+      const msg = `Successfully registered new ${createUserForm.role}: ${createUserForm.username}`;
       setSuccessMsg(msg);
       if (showToast) showToast(msg, 'success');
       setShowCreateModal(false);
@@ -226,12 +226,15 @@ export default function SysAdminDashboard({ token, onLogout, DashboardHeader, sh
         last_name: '',
         specialty: '',
         phone: '',
+        email: '',
         role: 'doctor',
         change_password_on_next_login: false,
+        medical_aid_number: '',
       });
       fetchUsers();
     } catch (err) {
-      setError(err.message);
+      setError(err.message || 'Failed to register user account.');
+      if (showToast) showToast(err.message || 'Failed to register user account.', 'error');
     }
   }
 
@@ -1101,6 +1104,13 @@ export default function SysAdminDashboard({ token, onLogout, DashboardHeader, sh
             </div>
             
             <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
+              {error && (
+                <div className="auth3-error-box" style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <i className="fa-solid fa-circle-exclamation"></i>
+                  <span>{error}</span>
+                  <button type="button" onClick={() => setError('')} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>×</button>
+                </div>
+              )}
               <form onSubmit={handleCreateUserSubmit} className="auth-form" style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
                 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>

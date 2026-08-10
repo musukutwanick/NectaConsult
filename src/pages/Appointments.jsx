@@ -638,6 +638,10 @@ export default function Appointments({ token, role, onRefreshDashboard, autoOpen
                                 <i className="fa-solid fa-circle-notch fa-spin" style={{ marginRight: '6px', fontSize: '12px', color: '#0f172a' }}></i>
                                 PENDING DOCTOR
                               </span>
+                            ) : appointment.status === 'rejected' ? (
+                              <span style={{ color: '#ef4444', fontWeight: 700, fontSize: '13px', textTransform: 'uppercase' }}>
+                                REJECTED
+                              </span>
                             ) : (
                               <span style={{ color: '#0f172a', fontWeight: 700, fontSize: '13px', textTransform: 'uppercase' }}>
                                 {appointment.status}
@@ -676,7 +680,7 @@ export default function Appointments({ token, role, onRefreshDashboard, autoOpen
                                 Join Consultation &rarr;
                               </button>
                             )}
-                            {appointment.status !== 'cancelled' && appointment.status !== 'done' && appointment.status !== 'start' && (
+                            {appointment.status !== 'cancelled' && appointment.status !== 'rejected' && appointment.status !== 'done' && appointment.status !== 'start' && (
                               <>
                                 <button type="button" className="mini-button" onClick={() => openReschedule(appointment)}>
                                   Reschedule

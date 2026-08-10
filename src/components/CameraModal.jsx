@@ -24,9 +24,15 @@ export default function CameraModal({ isOpen, onClose, onCapture }) {
   async function startCamera(mode) {
     stopCamera();
     setCameraError(null);
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setCameraError("Live camera preview is unavailable over unencrypted HTTP. Tap 'Device Camera / Gallery' below.");
+      return;
+    }
+
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: mode, width: { ideal: 1280 }, height: { ideal: 720 } },
+        video: { facingMode: mode },
         audio: false
       });
       setStream(mediaStream);
@@ -34,8 +40,20 @@ export default function CameraModal({ isOpen, onClose, onCapture }) {
         videoRef.current.srcObject = mediaStream;
       }
     } catch (err) {
-      console.warn("Camera access failed", err);
-      setCameraError("Webcam access disabled or unavailable.");
+      console.warn("Camera facingMode access failed, trying simple video constraint", err);
+      try {
+        const mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false
+        });
+        setStream(mediaStream);
+        if (videoRef.current) {
+          videoRef.current.srcObject = mediaStream;
+        }
+      } catch (fallbackErr) {
+        console.warn("Camera access failed", fallbackErr);
+        setCameraError("Webcam stream is disabled or unavailable. Tap 'Device Camera / Gallery' below.");
+      }
     }
   }
 
@@ -106,28 +124,36 @@ export default function CameraModal({ isOpen, onClose, onCapture }) {
           </button>
         </div>
 
+        {/* Hidden Native Device Camera Input */}
+        <input
+          type="file"
+          ref={cameraInputRef}
+          accept="image/*"
+          capture="environment"
+          onChange={handleNativeCameraCapture}
+          style={{ display: 'none' }}
+        />
+
         {/* Camera / Preview Area */}
         <div style={{ position: 'relative', width: '100%', background: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '280px', maxHeight: '360px', overflow: 'hidden' }}>
           {capturedImage ? (
             <img src={capturedImage} alt="Captured preview" style={{ maxWidth: '100%', maxHeight: '360px', objectFit: 'contain' }} />
           ) : cameraError ? (
-            <div style={{ padding: '24px', textAlign: 'center', color: '#cbd5e1' }}>
-              <p style={{ margin: '0 0 16px 0', fontSize: '14px', color: '#f87171' }}>{cameraError}</p>
+            <div style={{ padding: '24px', textAlign: 'center', color: '#cbd5e1', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px' }}>
+              <i className="fa-solid fa-camera-rotate" style={{ fontSize: '36px', color: '#94a3b8' }}></i>
+              <p style={{ margin: 0, fontSize: '13.5px', color: '#cbd5e1', lineHeight: '1.4' }}>{cameraError}</p>
               <button
                 type="button"
                 onClick={() => cameraInputRef.current?.click()}
-                style={{ background: '#3b82f6', color: 'white', border: 'none', padding: '10px 18px', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, fontSize: '14px', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+                style={{
+                  background: '#3b82f6', color: 'white', border: 'none',
+                  padding: '12px 22px', borderRadius: '10px', cursor: 'pointer',
+                  fontWeight: 700, fontSize: '14px', display: 'inline-flex', alignItems: 'center', gap: '8px',
+                  boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)'
+                }}
               >
-                <i className="fa-solid fa-camera"></i> Open Native Camera
+                <i className="fa-solid fa-camera"></i> Open Phone/Laptop Camera
               </button>
-              <input
-                type="file"
-                ref={cameraInputRef}
-                accept="image/*"
-                capture="environment"
-                onChange={handleNativeCameraCapture}
-                style={{ display: 'none' }}
-              />
             </div>
           ) : (
             <>
@@ -156,7 +182,7 @@ export default function CameraModal({ isOpen, onClose, onCapture }) {
         </div>
 
         {/* Action Buttons */}
-        <div style={{ padding: '16px', display: 'flex', justifyContent: 'center', gap: '12px', background: '#1e293b' }}>
+        <div style={{ padding: '16px', display: 'flex', justifyContent: 'center', gap: '12px', background: '#1e293b', flexWrap: 'wrap' }}>
           {capturedImage ? (
             <>
               <button
@@ -174,20 +200,35 @@ export default function CameraModal({ isOpen, onClose, onCapture }) {
                 <i className="fa-solid fa-paper-plane"></i> Send Photo
               </button>
             </>
-          ) : !cameraError ? (
-            <button
-              type="button"
-              onClick={takeSnapshot}
-              style={{
-                background: '#ef4444', color: 'white', border: 'none',
-                padding: '12px 28px', borderRadius: '30px', cursor: 'pointer',
-                fontWeight: 700, fontSize: '15px', display: 'flex', alignItems: 'center', gap: '8px',
-                boxShadow: '0 4px 14px rgba(239, 68, 68, 0.4)'
-              }}
-            >
-              <i className="fa-solid fa-camera"></i> Snap Photo
-            </button>
-          ) : null}
+          ) : (
+            <>
+              {!cameraError && (
+                <button
+                  type="button"
+                  onClick={takeSnapshot}
+                  style={{
+                    background: '#ef4444', color: 'white', border: 'none',
+                    padding: '12px 24px', borderRadius: '30px', cursor: 'pointer',
+                    fontWeight: 700, fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px',
+                    boxShadow: '0 4px 14px rgba(239, 68, 68, 0.4)'
+                  }}
+                >
+                  <i className="fa-solid fa-camera"></i> Snap Photo
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => cameraInputRef.current?.click()}
+                style={{
+                  background: '#0284c7', color: 'white', border: 'none',
+                  padding: '12px 20px', borderRadius: '30px', cursor: 'pointer',
+                  fontWeight: 700, fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px'
+                }}
+              >
+                <i className="fa-solid fa-mobile-screen-button"></i> Device Camera / Gallery
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>

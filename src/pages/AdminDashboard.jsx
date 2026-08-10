@@ -192,7 +192,8 @@ export default function AdminDashboard({ token, onLogout, DashboardHeader, showT
       await loadAdminDashboard();
       await loadDoctors();
     } catch (err) {
-      setError(err.message);
+      setError(err.message || 'Failed to create doctor account.');
+      if (showToast) showToast(err.message || 'Failed to create doctor account.', 'error');
     }
   }
 

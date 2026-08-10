@@ -60,6 +60,7 @@ class Appointment(models.Model):
         ('start', 'Start'),
         ('done', 'Done'),
         ('cancelled', 'Cancelled'),
+        ('rejected', 'Rejected'),
     ]
 
     patient = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='patient_appointments', db_index=True)

@@ -66,41 +66,17 @@ from .services import document_service, cache_service, notification_service
 
 
 def get_admin_emails():
-    return list(User.objects.filter(profile__role__in=['admin', 'sysadmin']).exclude(email='').values_list('email', flat=True))
+    emails = list(User.objects.filter(profile__role__in=['admin', 'sysadmin']).exclude(email='').values_list('email', flat=True))
+    if not emails:
+        emails = ['nectaconsult@nectacare.co.zw']
+    return emails
 
 
-
-MOCK_CELLMED_MEMBERS = {
-    'CM-12345': {
-        'first_name': 'Lebo',
-        'last_name': 'Mokoena',
-        'date_of_birth': '1990-06-15',
-        'phone': '+27 82 555 0101',
-        'email': 'lebo.mokoena@cellmed.co.za',
-        'address': '45 Commissioner St, Johannesburg',
-    },
-    'CM-10931': {
-        'first_name': 'Thabo',
-        'last_name': 'Dube',
-        'date_of_birth': '1985-11-22',
-        'phone': '+27 71 333 4455',
-        'email': 'thabo.dube@cellmed.co.za',
-        'address': '88 Chief Albert Luthuli St, Durban',
-    },
-    'CM-99999': {
-        'first_name': 'Sarah',
-        'last_name': 'Smith',
-        'date_of_birth': '1993-04-05',
-        'phone': '+27 60 777 8899',
-        'email': 'sarah.smith@cellmed.co.za',
-        'address': '12 Ocean Drive, Cape Town',
-    }
-}
 
 def get_member_details(membership_number):
     membership_number = membership_number.strip().upper()
     
-    # Check database first
+    # Check database only for real CellMed records
     db_member = CellMedMember.objects.filter(membership_number=membership_number).first()
     if db_member:
         return {
@@ -115,31 +91,7 @@ def get_member_details(membership_number):
             'email': db_member.email,
             'address': db_member.address,
         }
-
-
-    member = MOCK_CELLMED_MEMBERS.get(membership_number)
-    if not member:
-        # Generate a stable deterministic mock based on the membership digits
-        digits = ''.join(filter(str.isdigit, membership_number)) or '12345'
-        num = int(digits)
-        first_names = ['Lebo', 'Thabo', 'Sarah', 'Zanele', 'Kgotso', 'Nomsa', 'Jabulani', 'Sipho', 'Palesa', 'Lerato']
-        last_names = ['Mokoena', 'Dube', 'Smith', 'Khumalo', 'Zulu', 'Botha', 'Ndlovu', 'Naidoo', 'Pretorius', 'Nkosi']
-        
-        f_idx = num % len(first_names)
-        l_idx = (num * 3) % len(last_names)
-        
-        first_name = first_names[f_idx]
-        last_name = last_names[l_idx]
-        
-        member = {
-            'first_name': first_name,
-            'last_name': last_name,
-            'date_of_birth': f'19{70 + (num % 30)}-{str(1 + (num % 12)).zfill(2)}-{str(1 + (num % 28)).zfill(2)}',
-            'phone': f'+27 82 {str(num % 1000).zfill(3)} {str((num * 7) % 10000).zfill(4)}',
-            'email': f'{first_name.lower()}.{last_name.lower()}@cellmed.co.za',
-            'address': f'{num % 500} Medical Aid Road, Suite {num % 50}, South Africa',
-        }
-    return member
+    return None
 
 
 class LookupMemberView(APIView):
@@ -544,13 +496,13 @@ class DashboardView(APIView):
             if patient:
                 note = ConsultationNote.objects.filter(doctor=doctor, patient=patient).first()
             
-            appointments = Appointment.objects.filter(doctor=doctor).exclude(status='booked').order_by('date', 'time_label')
+            appointments = Appointment.objects.filter(doctor=doctor).exclude(status__in=['booked', 'rejected', 'cancelled']).order_by('date', 'time_label')
             
             return Response({
                 'role': 'doctor',
                 'user': ProfileSerializer(profile).data,
                 'stats': [
-                    {'label': "Today's Appointments", 'value': str(appointments.exclude(status='done').exclude(status='cancelled').count()), 'note': 'Upcoming', 'icon': 'calendar'},
+                    {'label': "Today's Appointments", 'value': str(appointments.exclude(status='done').exclude(status__in=['cancelled', 'rejected']).count()), 'note': 'Upcoming', 'icon': 'calendar'},
                     {'label': 'Total Patients', 'value': '312', 'note': '+8 this week', 'icon': 'patient'},
                     {'label': 'Prescriptions Issued', 'value': str(Prescription.objects.filter(doctor=doctor).count()), 'note': 'This month', 'icon': 'prescription'},
                     {'label': 'Average Rating', 'value': '4.8', 'note': '204 reviews', 'icon': 'star'},
@@ -576,7 +528,7 @@ class DashboardView(APIView):
             'role': 'patient',
             'user': ProfileSerializer(profile).data,
             'stats': [
-                {'label': 'Upcoming Appointments', 'value': str(appointments.exclude(status='done').exclude(status='cancelled').count()), 'note': 'Active bookings', 'icon': 'calendar'},
+                {'label': 'Upcoming Appointments', 'value': str(appointments.exclude(status='done').exclude(status__in=['cancelled', 'rejected']).count()), 'note': 'Active bookings', 'icon': 'calendar'},
             ],
             'appointments': AppointmentSerializer(appointments, many=True).data,
             'prescriptions': PrescriptionSerializer(Prescription.objects.filter(patient=patient), many=True).data,
@@ -640,9 +592,15 @@ class PatientsView(APIView):
         patient_id = request.data.get('patient_id') or request.query_params.get('patient_id')
         patient_profile = get_object_or_404(Profile, id=patient_id, role='patient')
         user = patient_profile.user
+        email = user.email
+        med_num = patient_profile.medical_aid_number
         
         patient_name = patient_profile.title
         with transaction.atomic():
+            if med_num:
+                CellMedMember.objects.filter(membership_number__iexact=med_num).delete()
+            if email and not email.endswith('@nectacare.local'):
+                CellMedMember.objects.filter(email__iexact=email).delete()
             patient_profile.delete()
             user.delete()
             
@@ -667,7 +625,7 @@ class AppointmentView(APIView):
                     return Response({'detail': 'You do not have access to this patient\'s records.'}, status=status.HTTP_403_FORBIDDEN)
                 appointments = Appointment.objects.filter(patient=patient).order_by('-date', '-time_label')
             else:
-                appointments = Appointment.objects.filter(doctor=profile).exclude(status='booked').order_by('date', 'time_label')
+                appointments = Appointment.objects.filter(doctor=profile).exclude(status__in=['booked', 'rejected', 'cancelled']).order_by('date', 'time_label')
         else:
             appointments = Appointment.objects.filter(patient=profile).order_by('date', 'time_label')
         return Response(AppointmentSerializer(appointments, many=True).data)
@@ -855,7 +813,7 @@ class AppointmentView(APIView):
             rejection_reason = request.data.get('rejection_reason', '').strip()
             if not rejection_reason:
                 return Response({'detail': 'Please provide a reason for rejecting the appointment.'}, status=status.HTTP_400_BAD_REQUEST)
-            appointment.status = 'cancelled'
+            appointment.status = 'rejected'
             appointment.rejection_reason = rejection_reason
             appointment.save()
             Notification.objects.create(
@@ -909,6 +867,11 @@ class PrescriptionView(APIView):
         patient = get_object_or_404(Profile, id=patient_id, role='patient')
         appointment = Appointment.objects.filter(id=appointment_id).first() if appointment_id else None
 
+        doctor_reg = request.data.get('doctor_registration_number', '').strip() or profile.doctor_registration_number
+        doctor_quals = request.data.get('doctor_qualifications', '').strip() or profile.doctor_qualifications
+        doctor_addr = request.data.get('doctor_address', '').strip() or profile.clinic_address
+        doctor_sig = request.data.get('doctor_signature', '').strip() or profile.signature_data
+
         prescription = Prescription.objects.create(
             patient=patient,
             doctor=profile,
@@ -921,10 +884,10 @@ class PrescriptionView(APIView):
             drugs_json=request.data.get('drugs_json', '[]'),
             patient_address=request.data.get('patient_address', ''),
             patient_age=request.data.get('patient_age', ''),
-            doctor_registration_number=request.data.get('doctor_registration_number', ''),
-            doctor_qualifications=request.data.get('doctor_qualifications', ''),
-            doctor_address=request.data.get('doctor_address', ''),
-            doctor_signature=request.data.get('doctor_signature', '')
+            doctor_registration_number=doctor_reg,
+            doctor_qualifications=doctor_quals,
+            doctor_address=doctor_addr,
+            doctor_signature=doctor_sig
         )
 
         Notification.objects.create(
@@ -1090,8 +1053,11 @@ class AdminActionView(APIView):
                 )
             
             # Send doctor account notification and admin notification
-            email_service.send_doctor_account_created_email(user, password)
-            email_service.send_admin_new_doctor_email(get_admin_emails(), doctor_profile)
+            try:
+                email_service.send_doctor_account_created_email(user, password)
+                email_service.send_admin_new_doctor_email(get_admin_emails(), doctor_profile)
+            except Exception as err:
+                print(f"[DOCTOR EMAIL NOTICE] Could not send creation email: {err}")
 
             return Response(ProfileSerializer(doctor_profile).data, status=status.HTTP_201_CREATED)
 
@@ -1415,8 +1381,8 @@ class SysAdminUsersListView(APIView):
 
     def get(self, request):
         profile = request.user.profile
-        if profile.role != 'sysadmin':
-            return Response({'detail': 'Only system administrators can view administrative users list.'}, status=status.HTTP_403_FORBIDDEN)
+        if profile.role not in ['sysadmin', 'admin']:
+            return Response({'detail': 'Only administrators can view administrative users list.'}, status=status.HTTP_403_FORBIDDEN)
         
         # Get profiles with role doctor, admin, sysadmin
         profiles = Profile.objects.filter(role__in=['doctor', 'admin', 'sysadmin']).order_by('role', 'title')
@@ -1428,8 +1394,8 @@ class SysAdminCreateUserView(APIView):
 
     def post(self, request):
         profile = request.user.profile
-        if profile.role != 'sysadmin':
-            return Response({'detail': 'Only system administrators can register new users.'}, status=status.HTTP_403_FORBIDDEN)
+        if profile.role not in ['sysadmin', 'admin']:
+            return Response({'detail': 'Only administrators can register new users.'}, status=status.HTTP_403_FORBIDDEN)
         
         username = request.data.get('username', '').strip()
         password = request.data.get('password', '')
@@ -1482,8 +1448,11 @@ class SysAdminCreateUserView(APIView):
                     AvailabilitySlot.objects.create(doctor=new_profile, day=day, hours='08:00 - 17:00', is_off=False)
                 AvailabilitySlot.objects.create(doctor=new_profile, day='Saturday', hours='Off', is_off=True)
                 AvailabilitySlot.objects.create(doctor=new_profile, day='Sunday', hours='Off', is_off=True)
-                email_service.send_doctor_account_created_email(user, password)
-                email_service.send_admin_new_doctor_email(get_admin_emails(), new_profile)
+                try:
+                    email_service.send_doctor_account_created_email(user, password)
+                    email_service.send_admin_new_doctor_email(get_admin_emails(), new_profile)
+                except Exception as err:
+                    print(f"[DOCTOR EMAIL NOTICE] Could not send creation email: {err}")
             elif role == 'patient':
                 # Also ensure CellMedMember record exists
                 mem_num = medical_aid_number
@@ -1495,7 +1464,10 @@ class SysAdminCreateUserView(APIView):
                         'phone': phone,
                     }
                 )
-                email_service.send_patient_welcome_email(new_profile)
+                try:
+                    email_service.send_patient_welcome_email(new_profile)
+                except Exception as err:
+                    print(f"[PATIENT EMAIL NOTICE] Could not send welcome email: {err}")
 
             # Log audit trail
             AuditTrail.objects.create(
@@ -1708,19 +1680,16 @@ class SysAdminDeleteUserView(APIView):
 
     def delete(self, request):
         profile = request.user.profile
-        if profile.role != 'sysadmin':
-            return Response({'detail': 'Only system administrators can delete users.'}, status=status.HTTP_403_FORBIDDEN)
+        if profile.role not in ['sysadmin', 'admin']:
+            return Response({'detail': 'Only administrators can delete user accounts.'}, status=status.HTTP_403_FORBIDDEN)
 
-        user_id = request.data.get('user_id')
-        if not user_id:
-            user_id = request.query_params.get('user_id')
-
+        user_id = request.data.get('user_id') or request.query_params.get('user_id')
         if not user_id:
             return Response({'detail': 'User ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
 
         target_profile = get_object_or_404(Profile, id=user_id)
-        if target_profile.role not in ['doctor', 'admin', 'sysadmin']:
-            return Response({'detail': 'Only doctor, admin, and sysadmin profiles can be deleted.'}, status=status.HTTP_400_BAD_REQUEST)
+        if target_profile.role not in ['doctor', 'admin', 'sysadmin', 'patient']:
+            return Response({'detail': 'Invalid profile type for deletion.'}, status=status.HTTP_400_BAD_REQUEST)
 
         # Prevent sysadmin from deleting themselves
         if target_profile.user.id == request.user.id:
@@ -1728,17 +1697,25 @@ class SysAdminDeleteUserView(APIView):
 
         user = target_profile.user
         username = user.username
+        email = user.email
+        medical_aid_num = target_profile.medical_aid_number
         title = target_profile.title
         role = target_profile.role
 
         with transaction.atomic():
+            # Delete associated CellMedMember record if existing to prevent orphan email lockouts
+            if medical_aid_num:
+                CellMedMember.objects.filter(membership_number__iexact=medical_aid_num).delete()
+            if email and not email.endswith('@nectacare.local'):
+                CellMedMember.objects.filter(email__iexact=email).delete()
+
             user.delete()
 
             # Log audit trail
             AuditTrail.objects.create(
                 user=request.user,
                 action="User Deletion",
-                details=f"Deleted {role} profile '{title}' (username: {username})"
+                details=f"Deleted {role} profile '{title}' (username: {username}, email: {email})"
             )
 
         return Response({'detail': f"User {title} deleted successfully."})
@@ -2129,23 +2106,36 @@ class SysAdminDeleteMemberView(APIView):
 
     def delete(self, request):
         profile = request.user.profile
-        if profile.role != 'sysadmin':
-            return Response({'detail': 'Only system administrators can delete member records.'}, status=status.HTTP_403_FORBIDDEN)
+        if profile.role not in ['sysadmin', 'admin']:
+            return Response({'detail': 'Only administrators can delete member records.'}, status=status.HTTP_403_FORBIDDEN)
 
-        member_id = request.data.get('id')
+        member_id = request.data.get('id') or request.query_params.get('id')
         if not member_id:
             return Response({'detail': 'Member ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
 
         member = get_object_or_404(CellMedMember, id=member_id)
         num = member.membership_number
+        email = member.email
         name = f"{member.first_name} {member.last_name}"
-        member.delete()
 
-        AuditTrail.objects.create(
-            user=request.user,
-            action="Member Delete",
-            details=f"Deleted CellMed member record {num} ({name})"
-        )
+        with transaction.atomic():
+            # Delete corresponding registered User/Profile accounts if existing
+            if num:
+                profiles = list(Profile.objects.filter(medical_aid_number__iexact=num))
+                for p in profiles:
+                    p.user.delete()
+            if email and not email.endswith('@nectacare.local'):
+                users = list(User.objects.filter(email__iexact=email))
+                for u in users:
+                    u.delete()
+
+            member.delete()
+
+            AuditTrail.objects.create(
+                user=request.user,
+                action="Member Delete",
+                details=f"Deleted CellMed member record {num} ({name})"
+            )
 
         return Response({'detail': f"Member record for {name} ({num}) deleted successfully."})
 

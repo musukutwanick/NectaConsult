@@ -17,8 +17,10 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-nectaconsult-dev-key'
 
 DEBUG = os.environ.get('DEBUG', 'False').lower() in ['true', '1', 't']
 
-allowed_hosts_env = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1,nectaconsult-api.azurewebsites.net,nectaconsult.azurewebsites.net')
+allowed_hosts_env = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1,192.168.1.52,nectaconsult-api.azurewebsites.net,nectaconsult.azurewebsites.net')
 ALLOWED_HOSTS = [host.strip() for host in allowed_hosts_env.split(',') if host.strip()]
+if DEBUG:
+    ALLOWED_HOSTS.append('*')
 
 INSTALLED_APPS = [
     'django.contrib.admin',
