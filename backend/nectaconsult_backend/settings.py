@@ -204,16 +204,34 @@ if not DEBUG:
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+CORS_ALLOWED_ORIGINS = [
+    'https://green-forest-0229f3203.7.azurestaticapps.net',
+    'https://nectaconsult-web.azurestaticapps.net',
+    'https://nectaconsult.azurewebsites.net',
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+]
+
 cors_origins_env = os.environ.get('CORS_ALLOWED_ORIGINS')
 if cors_origins_env:
-    CORS_ALLOWED_ORIGINS = [origin.strip() for origin in cors_origins_env.split(',') if origin.strip()]
-else:
-    CORS_ALLOWED_ORIGINS = [
-        'https://nectaconsult-web.azurestaticapps.net',
-        'https://nectaconsult.azurewebsites.net',
-        'http://localhost:5173',
-        'http://127.0.0.1:5173',
-    ]
+    for origin in cors_origins_env.split(','):
+        o = origin.strip()
+        if o and o not in CORS_ALLOWED_ORIGINS:
+            CORS_ALLOWED_ORIGINS.append(o)
+
+CSRF_TRUSTED_ORIGINS = [
+    'https://green-forest-0229f3203.7.azurestaticapps.net',
+    'https://nectaconsult-api-a9djd7bxhfgpc9f9.southafricanorth-01.azurewebsites.net',
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+]
+
+csrf_origins_env = os.environ.get('CSRF_TRUSTED_ORIGINS')
+if csrf_origins_env:
+    for origin in csrf_origins_env.split(','):
+        o = origin.strip()
+        if o and o not in CSRF_TRUSTED_ORIGINS:
+            CSRF_TRUSTED_ORIGINS.append(o)
 
 CORS_ALLOW_ALL_ORIGINS = DEBUG
 CORS_ALLOW_CREDENTIALS = True
