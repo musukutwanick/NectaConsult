@@ -29,6 +29,7 @@ jobs:
           app_location: "/"
           api_location: ""
           output_location: "dist"
+          app_build_command: "npm run build"
         env:
           VITE_API_URL: https://nectaconsult-api-a9djd7bxhfgpc9f9.southafricanorth-01.azurewebsites.net/api/v1
 
