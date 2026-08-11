@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { api, displayName, firstInitials } from '../api';
+import { api, API_BASE, displayName, firstInitials } from '../api';
 
 export default function AdminDashboard({ token, onLogout, DashboardHeader, showToast }) {
   const [adminData, setAdminData] = useState(null);
@@ -200,7 +200,7 @@ export default function AdminDashboard({ token, onLogout, DashboardHeader, showT
   async function handleExportCSV() {
     try {
       const queryParams = new URLSearchParams({ ...reportFilters, export: 'csv' }).toString();
-      const response = await fetch(`/api/admin/reports/?${queryParams}`, {
+      const response = await fetch(`${API_BASE}/admin/reports/?${queryParams}`, {
         headers: {
           Authorization: `Token ${token}`,
         },

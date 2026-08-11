@@ -1,16 +1,21 @@
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '') || '/api/v1';
+export const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '') || '/api/v1';
 
 
 async function request(path, { method = 'GET', token = '', body } = {}) {
   const isFormData = body instanceof FormData;
-  const response = await fetch(`${API_BASE}${path}`, {
-    method,
-    headers: {
-      ...(body && !isFormData ? { 'Content-Type': 'application/json' } : {}),
-      ...(token ? { Authorization: `Token ${token}` } : {}),
-    },
-    body: body ? (isFormData ? body : JSON.stringify(body)) : undefined,
-  });
+  let response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      method,
+      headers: {
+        ...(body && !isFormData ? { 'Content-Type': 'application/json' } : {}),
+        ...(token ? { Authorization: `Token ${token}` } : {}),
+      },
+      body: body ? (isFormData ? body : JSON.stringify(body)) : undefined,
+    });
+  } catch (netErr) {
+    throw new Error('Network error: Unable to connect to server. Please check your connection.');
+  }
 
   if (response.status === 204) {
     return null;
@@ -19,7 +24,47 @@ async function request(path, { method = 'GET', token = '', body } = {}) {
   const payload = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    throw new Error(payload.detail || 'Request failed.');
+    let message = payload.detail || payload.error || payload.message;
+
+    if (!message && typeof payload === 'object' && payload !== null) {
+      const firstKey = Object.keys(payload)[0];
+      if (firstKey) {
+        const val = payload[firstKey];
+        const valMsg = Array.isArray(val) ? val.join(' ') : String(val);
+        message = `${firstKey}: ${valMsg}`;
+      }
+    }
+
+    if (!message) {
+      switch (response.status) {
+        case 400:
+          message = 'Bad Request (400). Please check your input parameters.';
+          break;
+        case 401:
+          message = 'Unauthorized (401). Session expired or invalid credentials.';
+          break;
+        case 403:
+          message = 'Forbidden (403). You do not have permission to access this resource.';
+          break;
+        case 404:
+          message = 'Not Found (404). The requested resource was not found.';
+          break;
+        case 429:
+          message = 'Too Many Requests (429). Please slow down and try again later.';
+          break;
+        case 500:
+        default:
+          message = response.status >= 500
+            ? 'Internal Server Error (500). Please try again later.'
+            : 'An unexpected error occurred.';
+          break;
+      }
+    }
+
+    const error = new Error(message);
+    error.status = response.status;
+    error.payload = payload;
+    throw error;
   }
 
   return payload;

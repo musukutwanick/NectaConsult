@@ -256,4 +256,10 @@ EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', GRAPH_SENDER_EMAIL)
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', f'NectaCare <{GRAPH_SENDER_EMAIL}>')
 
+# SSL Proxy Header & Host Security Settings (Required for Azure App Service & HTTPS Reverse Proxies)
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+SECURE_SSL_REDIRECT = os.environ.get('SECURE_SSL_REDIRECT', 'False' if DEBUG else 'True').lower() == 'true'
+ALLOWED_HOSTS = ['*']
+
+
 

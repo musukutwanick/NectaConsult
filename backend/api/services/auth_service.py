@@ -72,6 +72,8 @@ def record_failed_login(username: str, ip_address: str = ""):
         attempt.ip_address = ip_address
         attempt.save()
 
+    return attempt
+
 
 def reset_failed_login(username: str):
     """

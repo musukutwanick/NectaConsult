@@ -211,8 +211,7 @@ class LoginView(APIView):
         if not user:
             # Track failed login attempt via auth service
             if username:
-                record_failed_login(username.lower(), ip_address)
-
+                attempt = record_failed_login(username.lower(), ip_address)
 
                 target_user = None
                 prof = Profile.objects.filter(medical_aid_number__iexact=username).first()

@@ -2,6 +2,7 @@
 .env
 *.env
 .env.*
+!.env.example
 backend/.env
 
 # Python
@@ -19,3 +20,4 @@ node_modules/
 dist/
 .DS_Store
 *.log
+*.zip
