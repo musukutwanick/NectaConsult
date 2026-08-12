@@ -559,7 +559,7 @@ export default function SysAdminDashboard({ token, onLogout, DashboardHeader, sh
                               fontSize: '12px',
                               fontWeight: 'bold',
                               textTransform: 'uppercase',
-                              color: u.role === 'sysadmin' ? '#ef4444' : u.role === 'admin' ? '#0284c7' : '#15803d'
+                              color: 'var(--text)'
                             }}>
                               {u.role}
                             </span>
@@ -568,7 +568,7 @@ export default function SysAdminDashboard({ token, onLogout, DashboardHeader, sh
                           <td style={{ padding: '14px 12px' }}>{u.phone || 'N/A'}</td>
                           <td style={{ padding: '14px 12px' }}>
                             {u.change_password_on_next_login ? (
-                              <span style={{ color: '#ef4444', fontWeight: 'bold' }}>⚠️ Force Update Next Login</span>
+                              <span style={{ color: 'var(--text)', fontWeight: 'bold' }}>Force Update Next Login</span>
                             ) : (
                               <span style={{ color: 'var(--success)' }}>✓ Up to date</span>
                             )}

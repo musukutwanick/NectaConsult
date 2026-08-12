@@ -163,7 +163,7 @@ export default function Prescriptions({ token, role, onRefreshDashboard }) {
       {loading ? (
         <p>Loading prescriptions...</p>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '20px' }}>
+        <div className="prescriptions-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '20px' }}>
           {prescriptions.length === 0 ? (
             <p style={{ color: 'var(--muted)', gridColumn: '1 / -1' }}>No prescriptions issued.</p>
           ) : (

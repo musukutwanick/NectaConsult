@@ -4065,6 +4065,104 @@ img {
   }
 }
 
+@media (max-width: 768px) {
+  .appointments-page-container,
+  .records-page-container,
+  .prescriptions-page-container {
+    padding: 14px 12px !important;
+  }
+
+  .appointments-page-container .appointments-hero-section {
+    margin-bottom: 14px;
+  }
+
+  .appointments-page-container .appointments-search-box {
+    width: 100%;
+    min-height: 46px;
+  }
+
+  .appointments-page-container .appointments-search-box input {
+    font-size: 16px;
+  }
+
+  .appointments-page-container .doctor-card-inner {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+
+  .appointments-page-container .doctor-card-info h3,
+  .appointments-page-container .doctor-card-specialty,
+  .appointments-page-container .doctor-card-availability {
+    white-space: normal;
+    justify-content: center;
+  }
+
+  .appointments-page-container .doctor-book-btn-primary,
+  .appointments-page-container .hero-btn-primary,
+  .appointments-page-container .hero-btn-secondary,
+  .appointments-page-container .cta-button,
+  .appointments-page-container .secondary-button,
+  .appointments-page-container .mini-button,
+  .records-page-container .hero-btn-primary,
+  .records-page-container .hero-btn-secondary,
+  .records-page-container .cta-button,
+  .records-page-container .secondary-button,
+  .records-page-container .mini-button,
+  .prescriptions-page-container .hero-btn-primary,
+  .prescriptions-page-container .hero-btn-secondary,
+  .prescriptions-page-container .cta-button,
+  .prescriptions-page-container .secondary-button {
+    width: 100% !important;
+  }
+
+  .appointments-page-container .panel,
+  .records-page-container .panel,
+  .prescriptions-page-container .panel {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .appointments-page-container table,
+  .records-page-container table,
+  .prescriptions-page-container table {
+    min-width: 640px;
+  }
+
+  .prescriptions-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 540px) {
+  .appointments-page-container .doctor-card-panel {
+    padding: 16px !important;
+  }
+
+  .appointments-page-container .doctor-avatar-circle {
+    width: 56px !important;
+    height: 56px !important;
+    font-size: 16px !important;
+  }
+
+  .appointments-page-container .appointments-breadcrumbs {
+    font-size: 12px;
+  }
+
+  .appointments-page-container .appointments-hero-title,
+  .records-page-container h1,
+  .prescriptions-page-container h1 {
+    font-size: 1.55rem !important;
+  }
+
+  .appointments-page-container .appointments-search-row,
+  .appointments-page-container .appointments-doctors-grid,
+  .records-page-container .panel,
+  .prescriptions-page-container .panel {
+    margin-top: 12px;
+  }
+}
+
 /* Automatic Table Responsiveness */
 .dashboard-main table,
 .admin-main table {

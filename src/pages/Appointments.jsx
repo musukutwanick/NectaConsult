@@ -187,15 +187,19 @@ export default function Appointments({ token, role, onRefreshDashboard, autoOpen
         const startHourStr = parts[0]?.trim() || '08:00';
         const endHourStr = parts[1]?.trim() || '17:00';
 
-        let startH = parseInt(startHourStr.split(':')[0], 10) || 8;
-        const endH = parseInt(endHourStr.split(':')[0], 10) || 17;
+        const startHourParts = startHourStr.split(':');
+        const endHourParts = endHourStr.split(':');
+        let startMinutes = (parseInt(startHourParts[0], 10) || 8) * 60 + (parseInt(startHourParts[1], 10) || 0);
+        const endMinutes = (parseInt(endHourParts[0], 10) || 17) * 60 + (parseInt(endHourParts[1], 10) || 0);
+        const slotDuration = 20;
 
         // Skip past hours for today
         if (offset === 0) {
-          if (currentHour >= startH) {
-            startH = currentHour + 1;
+          const currentMinutes = currentHour * 60 + today.getMinutes();
+          if (currentMinutes >= startMinutes) {
+            startMinutes = currentMinutes + slotDuration;
           }
-          if (startH >= endH) {
+          if (startMinutes >= endMinutes) {
             continue; // Day is past working hours, check tomorrow
           }
         }
@@ -212,8 +216,10 @@ export default function Appointments({ token, role, onRefreshDashboard, autoOpen
           });
 
           // Skip booked time slots
-          while (startH < endH) {
-            const slotPrefix = `${String(startH).padStart(2, '0')}:00`;
+          while (startMinutes + slotDuration <= endMinutes) {
+            const slotStartHour = Math.floor(startMinutes / 60);
+            const slotStartMinute = startMinutes % 60;
+            const slotPrefix = `${String(slotStartHour).padStart(2, '0')}:${String(slotStartMinute).padStart(2, '0')}`;
             const isBooked = docAppts.some((a) => {
               const timeVal = a.time_label || a.time || '';
               return timeVal.includes(slotPrefix);
@@ -221,16 +227,21 @@ export default function Appointments({ token, role, onRefreshDashboard, autoOpen
             if (!isBooked) {
               break;
             }
-            startH++;
+            startMinutes += slotDuration;
           }
 
-          if (startH >= endH) {
+          if (startMinutes >= endMinutes) {
             continue; // All slots booked out for this day, try next candidate day
           }
         }
 
-        const slotTimeDisplay = `${String(startH).padStart(2, '0')}:00`;
-        const firstSlotLabel = `${String(startH).padStart(2, '0')}:00 - ${String(startH + 1).padStart(2, '0')}:00`;
+        const slotStartHour = Math.floor(startMinutes / 60);
+        const slotStartMinute = startMinutes % 60;
+        const slotEndMinutes = startMinutes + 20;
+        const slotEndHour = Math.floor(slotEndMinutes / 60);
+        const slotEndMinute = slotEndMinutes % 60;
+        const slotTimeDisplay = `${String(slotStartHour).padStart(2, '0')}:${String(slotStartMinute).padStart(2, '0')}`;
+        const firstSlotLabel = `${slotTimeDisplay} - ${String(slotEndHour).padStart(2, '0')}:${String(slotEndMinute).padStart(2, '0')}`;
 
         let labelText = '';
         if (offset === 0) {

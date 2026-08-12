@@ -188,6 +188,17 @@ export default function MedicalRecords({ token, role, appointments = [], onStart
     }
   }, []);
 
+  useEffect(() => {
+    if (role !== 'doctor') return;
+
+    const handlePrescriptionCreated = () => {
+      loadDoctorWorkspace();
+    };
+
+    window.addEventListener('necta-prescription-created', handlePrescriptionCreated);
+    return () => window.removeEventListener('necta-prescription-created', handlePrescriptionCreated);
+  }, [role]);
+
   async function loadRecords(patientId = '') {
     setLoading(true);
     setError('');

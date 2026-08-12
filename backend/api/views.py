@@ -1237,15 +1237,28 @@ class DoctorAvailabilityView(APIView):
             try:
                 # Parse start and end hours, e.g., '08:00 - 16:00'
                 start_str, end_str = slot.hours.split('-')
-                start_h = int(start_str.split(':')[0])
-                end_h = int(end_str.split(':')[0])
-                
-                for h in range(start_h, end_h):
-                    slot_label = f"{h:02d}:00 - {h+1:02d}:00"
+                start_parts = [int(part) for part in start_str.strip().split(':')[:2]]
+                end_parts = [int(part) for part in end_str.strip().split(':')[:2]]
+                start_minutes = start_parts[0] * 60 + (start_parts[1] if len(start_parts) > 1 else 0)
+                end_minutes = end_parts[0] * 60 + (end_parts[1] if len(end_parts) > 1 else 0)
+
+                slot_length_minutes = 20
+                current_minutes = start_minutes
+                while current_minutes + slot_length_minutes <= end_minutes:
+                    slot_start_hour = current_minutes // 60
+                    slot_start_minute = current_minutes % 60
+                    slot_end_minutes = current_minutes + slot_length_minutes
+                    slot_end_hour = slot_end_minutes // 60
+                    slot_end_minute = slot_end_minutes % 60
+                    slot_label = (
+                        f"{slot_start_hour:02d}:{slot_start_minute:02d} - "
+                        f"{slot_end_hour:02d}:{slot_end_minute:02d}"
+                    )
                     available_slots.append(slot_label)
+                    current_minutes += slot_length_minutes
             except Exception:
                 # Fallback standard slots
-                available_slots = ['09:00 - 10:00', '10:00 - 11:00', '11:00 - 12:00', '12:00 - 13:00', '13:00 - 14:00', '14:00 - 15:00', '15:00 - 16:00']
+                available_slots = ['09:00 - 09:20', '09:20 - 09:40', '09:40 - 10:00', '10:00 - 10:20', '10:20 - 10:40', '10:40 - 11:00', '11:00 - 11:20', '11:20 - 11:40', '11:40 - 12:00', '12:00 - 12:20', '12:20 - 12:40', '12:40 - 13:00', '13:00 - 13:20', '13:20 - 13:40', '13:40 - 14:00', '14:00 - 14:20', '14:20 - 14:40', '14:40 - 15:00', '15:00 - 15:20', '15:20 - 15:40', '15:40 - 16:00']
                 break
 
         # Filter out slots that are already booked on this date

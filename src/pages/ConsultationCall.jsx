@@ -42,6 +42,7 @@ export default function ConsultationCall({ role, token, patientName, doctorName,
   const [position, setPosition] = useState({ x: window.innerWidth - 480, y: 80 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [isMobileViewport, setIsMobileViewport] = useState(() => typeof window !== 'undefined' ? window.innerWidth <= 768 : false);
 
   // Voice playback states
   const [playingMsgId, setPlayingMsgId] = useState(null);
@@ -73,6 +74,16 @@ export default function ConsultationCall({ role, token, patientName, doctorName,
       }).catch(e => console.error(e));
     }
   }, [token]);
+
+  useEffect(() => {
+    function handleViewportChange() {
+      setIsMobileViewport(window.innerWidth <= 768);
+    }
+
+    handleViewportChange();
+    window.addEventListener('resize', handleViewportChange);
+    return () => window.removeEventListener('resize', handleViewportChange);
+  }, []);
 
 
 
@@ -557,6 +568,14 @@ export default function ConsultationCall({ role, token, patientName, doctorName,
       };
 
       const created = await api.createPrescription(token, payload);
+      window.dispatchEvent(new CustomEvent('necta-prescription-created', { detail: { patientId, prescriptionId: created.id } }));
+      const refreshed = await api.getPrescriptions(token);
+      if (Array.isArray(refreshed)) {
+        const match = refreshed.find((item) => String(item.id) === String(created.id));
+        setActiveViewPrescription(match || created);
+      } else {
+        setActiveViewPrescription(created);
+      }
 
       const msgBody = `[PRESCRIPTION] ${validDrugs[0].name}|${validDrugs[0].dosage}|${validDrugs[0].instructions || ''}|${created.id}`;
       const msg = await api.sendMessage(token, threadId, msgBody);
@@ -661,10 +680,11 @@ export default function ConsultationCall({ role, token, patientName, doctorName,
   const rawPartner = role === 'doctor' ? patientName : doctorName;
   const partnerName = typeof rawPartner === 'string' && rawPartner.trim() ? rawPartner : (role === 'doctor' ? 'Patient' : 'Doctor');
   const partnerInitials = partnerName.split(' ').filter(Boolean).map(n => n[0]).join('').toUpperCase() || (role === 'doctor' ? 'P' : 'D');
+  const useFullscreenShell = isMaximized || isMobileViewport;
 
   // Floating wrapper card style
-  const floatingStyles = isMaximized ? {
-    position: 'fixed', inset: 0, width: '100vw', height: '100vh',
+  const floatingStyles = useFullscreenShell ? {
+    position: 'fixed', inset: 0, width: '100vw', height: '100dvh',
     background: isDarkMode ? '#0b0f19' : '#f0f2f5', color: isDarkMode ? '#e2e8f0' : '#111b21', zIndex: 10000,
     display: 'flex', flexDirection: 'column',
     transition: 'all 0.15s ease-out',
@@ -693,7 +713,7 @@ export default function ConsultationCall({ role, token, patientName, doctorName,
         }
       `}</style>
       {/* Background overlay only when maximized to isolate conversation focus */}
-      {isMaximized && (
+      {useFullscreenShell && !isMobileViewport && (
         <div style={{
           position: 'fixed', inset: 0, background: 'rgba(5, 7, 12, 0.75)',
           backdropFilter: 'blur(6px)', zIndex: 9999
@@ -702,7 +722,7 @@ export default function ConsultationCall({ role, token, patientName, doctorName,
 
       <div style={floatingStyles}>
         {/* Drag handle line indicator in floating mode */}
-        {!isMaximized && (
+        {!useFullscreenShell && (
           <div 
             onMouseDown={handleMouseDown}
             style={{
@@ -723,11 +743,11 @@ export default function ConsultationCall({ role, token, patientName, doctorName,
           ref={headerRef}
           style={{
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            padding: isMaximized ? '16px 24px' : '12px 18px', 
+            padding: useFullscreenShell ? (isMobileViewport ? '12px 14px' : '16px 24px') : '12px 18px', 
             borderBottom: isDarkMode ? '1px solid #1e293b' : '1px solid #e9edef', 
             background: isDarkMode ? '#131c2e' : '#ffffff',
             color: isDarkMode ? '#e2e8f0' : '#111b21',
-            cursor: isMaximized ? 'default' : 'inherit', userSelect: 'none'
+            cursor: useFullscreenShell ? 'default' : 'inherit', userSelect: 'none'
           }}
         >
           {/* User Bio info */}
