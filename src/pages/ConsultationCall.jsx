@@ -6,7 +6,7 @@ import SignaturePad from '../components/SignaturePad';
 
 
 
-export default function ConsultationCall({ role, token, patientName, doctorName, patientId, doctorId, appointmentId, onEndCall, appointmentStatus, readOnly = false }) {
+export default function ConsultationCall({ role, token, patientName, doctorName, patientId, doctorId, appointmentId, onEndCall, appointmentStatus, readOnly = false, partnerProfilePic = null }) {
   const localVideoRef = useRef(null);
   const messagesEndRef = useRef(null);
   const headerRef = useRef(null);
@@ -140,12 +140,27 @@ export default function ConsultationCall({ role, token, patientName, doctorName,
     if (recordTimerRef.current) clearInterval(recordTimerRef.current);
     setIsRecording(false);
     setRecordDuration(0);
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      try { mediaRecorderRef.current.stop(); } catch(e){}
+    if (mediaRecorderRef.current) {
+      mediaRecorderRef.current.onstop = null;
+      if (mediaRecorderRef.current.state !== 'inactive') {
+        try { mediaRecorderRef.current.stop(); } catch(e){}
+      }
     }
     if (recordingStreamRef.current) {
       try { recordingStreamRef.current.getTracks().forEach(t => t.stop()); } catch(e){}
     }
+    audioChunksRef.current = [];
+  }
+
+  async function handleEndCallSession() {
+    if (threadId && !isReadOnlySession) {
+      try {
+        await api.sendMessage(token, threadId, '[SYSTEM] Consultation ended');
+      } catch (e) {
+        console.error('Failed to send consultation ended system message:', e);
+      }
+    }
+    if (onEndCall) onEndCall();
   }
 
   // Audio cleanup
@@ -230,9 +245,19 @@ export default function ConsultationCall({ role, token, patientName, doctorName,
           res = await api.thread(token, doctorId || '');
         }
         setThreadId(res.thread_id);
-        setMessages(res.messages || []);
+        const msgs = res.messages || [];
+        setMessages(msgs);
         const isPartnerTyping = role === 'doctor' ? res.is_patient_typing : res.is_doctor_typing;
         setPartnerTyping(!!isPartnerTyping);
+
+        // Auto-post Consultation started system message if not present
+        const hasStartMsg = msgs.some(m => typeof m.body === 'string' && m.body.startsWith('[SYSTEM] Consultation started'));
+        if (!hasStartMsg && res.thread_id && !isReadOnlySession) {
+          try {
+            const sysMsg = await api.sendMessage(token, res.thread_id, '[SYSTEM] Consultation started');
+            setMessages(prev => (prev.some(m => m.id === sysMsg.id) ? prev : [...prev, sysMsg]));
+          } catch (e) {}
+        }
       } catch (err) {
         console.error('Failed to load chat thread', err);
       }
@@ -709,9 +734,14 @@ export default function ConsultationCall({ role, token, patientName, doctorName,
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div style={{
               width: '40px', height: '40px', borderRadius: '50%', background: '#1a80c7', color: 'white',
-              display: 'flex', justifyContent: 'center', alignItems: 'center', fontWeight: 'bold', fontSize: '15px'
+              display: 'flex', justifyContent: 'center', alignItems: 'center', fontWeight: 'bold', fontSize: '15px',
+              overflow: 'hidden', flexShrink: 0
             }}>
-              {partnerInitials}
+              {partnerProfilePic ? (
+                <img src={partnerProfilePic} alt={partnerName} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+              ) : (
+                partnerInitials
+              )}
             </div>
 
             <div>
@@ -790,7 +820,7 @@ export default function ConsultationCall({ role, token, patientName, doctorName,
 
             <button
               type="button"
-              onClick={onEndCall}
+              onClick={handleEndCallSession}
               style={{
                 background: '#ef4444', color: 'white', border: 'none', width: '32px', height: '32px',
                 borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -814,6 +844,36 @@ export default function ConsultationCall({ role, token, patientName, doctorName,
         }}>
           {messages.map((msg) => {
             const msgBodyText = typeof msg.body === 'string' ? msg.body : (msg.body != null ? String(msg.body) : '');
+            if (msgBodyText.startsWith('[SYSTEM]')) {
+              const sysText = msgBodyText.replace('[SYSTEM]', '').trim();
+              const isEnded = sysText.toLowerCase().includes('ended');
+              return (
+                <div key={msg.id} style={{
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  width: '100%',
+                  margin: '8px 0'
+                }}>
+                  <div style={{
+                    background: isDarkMode ? 'rgba(30, 41, 59, 0.9)' : 'rgba(255, 255, 255, 0.92)',
+                    border: isDarkMode ? '1px solid #334155' : '1px solid #e2e8f0',
+                    color: isDarkMode ? '#cbd5e1' : '#54656f',
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    padding: '5px 14px',
+                    borderRadius: '16px',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}>
+                    <i className={isEnded ? "fa-solid fa-circle-stop" : "fa-solid fa-circle-play"} style={{ color: isEnded ? '#ef4444' : '#10b981', fontSize: '11px' }}></i>
+                    <span>{sysText}</span>
+                  </div>
+                </div>
+              );
+            }
             const isSelf = msg.sender_username === (role === 'doctor' ? 'dr.moyo' : 'lebo.mokoena') || msg.sender_role === role;
             const isAudio = msgBodyText.startsWith('[Voice Message]:');
             let duration = 0;
@@ -1063,31 +1123,18 @@ export default function ConsultationCall({ role, token, patientName, doctorName,
               {isRecording ? (
                 <div style={{
                   display: 'flex', alignItems: 'center', gap: '12px', flex: 1,
-                  background: isDarkMode ? '#2d1215' : '#fef2f2',
-                  border: isDarkMode ? '1px solid #7f1d1d' : '1px solid #fee2e2',
+                  background: isDarkMode ? 'rgba(26, 128, 199, 0.15)' : '#f0f9ff',
+                  border: isDarkMode ? '1px solid rgba(26, 128, 199, 0.4)' : '1px solid #bae6fd',
                   borderRadius: '24px', padding: '8px 16px'
                 }}>
-                  <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#ef4444', display: 'inline-block', animation: 'pulse 1s infinite' }}></span>
-                  <span style={{ color: '#ef4444', fontWeight: 'bold', fontSize: '13.5px' }}>Recording voice note... {formatDuration(recordDuration)}</span>
+                  <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#1a80c7', display: 'inline-block', animation: 'pulse 1s infinite' }}></span>
+                  <span style={{ color: '#1a80c7', fontWeight: 'bold', fontSize: '13.5px' }}>Recording voice note... {formatDuration(recordDuration)}</span>
                   <div style={{ marginLeft: 'auto', display: 'flex', gap: '6px' }}>
                     <button type="button" style={{ background: '#64748b', color: 'white', border: 'none', borderRadius: '16px', padding: '4px 12px', fontSize: '12px', cursor: 'pointer', fontWeight: 'bold' }} onClick={cancelAudioRecording}>Cancel</button>
-                    <button type="button" style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: '16px', padding: '4px 12px', fontSize: '12px', cursor: 'pointer', fontWeight: 'bold' }} onClick={stopAndSendAudio}>Send</button>
                   </div>
                 </div>
               ) : (
                 <form onSubmit={handleSendMessage} style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
-                  <button
-                    type="button"
-                    title="Record Voice Note"
-                    onClick={startAudioRecording}
-                    style={{
-                      background: 'none', border: 'none', color: isDarkMode ? '#94a3b8' : '#54656f',
-                      fontSize: '18px', cursor: 'pointer', padding: '6px', borderRadius: '50%',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
-                    }}
-                  >
-                    <i className="fa-solid fa-microphone"></i>
-                  </button>
                   <div style={{ position: 'relative' }}>
                     <button
                       type="button"
@@ -1191,20 +1238,23 @@ export default function ConsultationCall({ role, token, patientName, doctorName,
                 </form>
               )}
 
-              {/* Record Audio Button */}
+              {/* Record Audio / Send Recording Button */}
               <button
                 type="button"
                 onClick={handleSendAudio}
+                title={isRecording ? "Send Voice Note" : "Record Voice Note"}
                 style={{
                   width: '36px', height: '36px', borderRadius: '50%',
-                  background: isRecording ? '#ef4444' : (isDarkMode ? '#1e293b' : '#f0f2f5'), 
+                  background: isRecording ? '#1a80c7' : (isDarkMode ? '#1e293b' : '#f0f2f5'), 
                   color: isRecording ? 'white' : (isDarkMode ? 'white' : '#64748b'),
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   cursor: 'pointer', fontSize: '14px', border: isDarkMode ? '1px solid #374151' : 'none',
-                  flexShrink: 0
+                  flexShrink: 0,
+                  boxShadow: isRecording ? '0 4px 12px rgba(26, 128, 199, 0.4)' : 'none',
+                  transition: 'all 0.2s ease'
                 }}
               >
-                {isRecording ? <i className="fa-solid fa-circle-check"></i> : <i className="fa-solid fa-microphone"></i>}
+                {isRecording ? <i className="fa-solid fa-circle-check" style={{ fontSize: '18px' }}></i> : <i className="fa-solid fa-microphone"></i>}
               </button>
             </>
           )}

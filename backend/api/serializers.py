@@ -22,10 +22,13 @@ class AppointmentSerializer(serializers.ModelSerializer):
     doctor_id = serializers.IntegerField(source='doctor.id', read_only=True)
     patient_membership = serializers.CharField(source='patient.medical_aid_number', read_only=True)
     patient_insurer = serializers.CharField(source='patient.plan', read_only=True)
+    patient_profile_pic = serializers.CharField(source='patient.profile_pic', read_only=True)
+    doctor_profile_pic = serializers.CharField(source='doctor.profile_pic', read_only=True)
+    doctor_specialty = serializers.CharField(source='doctor.specialty', read_only=True)
 
     class Meta:
         model = Appointment
-        fields = ['id', 'patient_name', 'doctor_name', 'patient_id', 'doctor_id', 'reason', 'time_label', 'date', 'status', 'patient_membership', 'patient_insurer', 'timezone', 'rejection_reason']
+        fields = ['id', 'patient_name', 'doctor_name', 'patient_id', 'doctor_id', 'reason', 'time_label', 'date', 'status', 'patient_membership', 'patient_insurer', 'patient_profile_pic', 'doctor_profile_pic', 'doctor_specialty', 'timezone', 'rejection_reason']
 
 
 class AvailabilitySerializer(serializers.ModelSerializer):

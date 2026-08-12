@@ -614,6 +614,7 @@ function App() {
             doctorName={callInfo?.doctor_name || (dashboard?.role === 'patient' ? 'Doctor' : displayName(dashboard?.user))}
             patientId={callInfo?.patient_id}
             doctorId={callInfo?.doctor_id}
+            partnerProfilePic={dashboard?.role === 'doctor' ? callInfo?.patient_profile_pic : callInfo?.doctor_profile_pic}
             appointmentId={callInfo?.id}
             appointmentStatus={callInfo?.status}
             onEndCall={async () => {
@@ -1417,7 +1418,13 @@ function DoctorDashboard({
                   ) : (
                     dashboard.appointments.slice(0, 5).map((appointment) => (
                       <div className="appointment-row" key={`${appointment.id}-${appointment.time_label}`}>
-                        <div className="appointment-avatar">{avatarFromName(appointment.patient_name)}</div>
+                        <div className="appointment-avatar" style={{ overflow: 'hidden' }}>
+                          {appointment.patient_profile_pic ? (
+                            <img src={appointment.patient_profile_pic} alt="" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                          ) : (
+                            avatarFromName(appointment.patient_name)
+                          )}
+                        </div>
                         <div className="appointment-copy">
                           <strong>{appointment.patient_name}</strong>
                           <span>{appointment.reason}</span>
@@ -1817,7 +1824,13 @@ function PatientDashboard({
                   ) : (
                     dashboard.appointments.slice(0, 5).map((appointment) => (
                       <div className="appointment-row" key={`${appointment.id}-${appointment.time_label}`}>
-                        <div className="appointment-avatar">{avatarFromName(appointment.doctor_name)}</div>
+                        <div className="appointment-avatar" style={{ overflow: 'hidden' }}>
+                          {appointment.doctor_profile_pic ? (
+                            <img src={appointment.doctor_profile_pic} alt="" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                          ) : (
+                            avatarFromName(appointment.doctor_name)
+                          )}
+                        </div>
                         <div className="appointment-copy">
                           <strong>{appointment.doctor_name}</strong>
                           <span>{appointment.reason}</span>

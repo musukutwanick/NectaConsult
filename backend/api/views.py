@@ -534,7 +534,7 @@ class DashboardView(APIView):
             'primary_prescription': PrescriptionSerializer(prescription).data if prescription else None,
             'chat_thread_id': thread.id if thread else None,
             'messages': ChatMessageSerializer(thread.messages.select_related('sender__user').order_by('sent_at'), many=True).data if thread else [],
-            'recommended_doctors': [{'name': doc.title or doc.user.get_full_name(), 'specialty': doc.specialty or 'General Practitioner'} for doc in doctors],
+            'recommended_doctors': [{'id': doc.id, 'name': doc.title or doc.user.get_full_name(), 'specialty': doc.specialty or 'General Practitioner', 'profile_pic': doc.profile_pic} for doc in doctors],
         })
 
 
