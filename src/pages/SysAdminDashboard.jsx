@@ -608,7 +608,7 @@ export default function SysAdminDashboard({ token, onLogout, DashboardHeader, sh
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
             <div>
               <h3 style={{ margin: 0, fontSize: '1.3rem' }}>CellMed Patient Member Roster</h3>
-              <p style={{ color: 'var(--muted)', margin: '4px 0 0 0', fontSize: '13.5px' }}>Register individual patient members or upload bulk CSV rosters for instant membership verification.</p>
+              <p style={{ color: 'var(--muted)', margin: '4px 0 0 0', fontSize: '13.5px' }}>Register individual patient members or upload bulk spreadsheet rosters for instant membership verification.</p>
             </div>
 
             {/* Sub-Tab Selector */}
@@ -674,7 +674,7 @@ export default function SysAdminDashboard({ token, onLogout, DashboardHeader, sh
                   transition: 'all 0.2s ease'
                 }}
               >
-                <i className="fa-solid fa-file-csv"></i> Bulk CSV Import
+                <i className="fa-solid fa-file-excel"></i> Bulk Spreadsheet Import
               </button>
             </div>
 
@@ -894,7 +894,7 @@ export default function SysAdminDashboard({ token, onLogout, DashboardHeader, sh
                     </div>
 
                     <div>
-                      <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '6px', color: '#334155' }}>Email Address</label>
+                      <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '6px', color: '#334155' }}>Email Address (Optional)</label>
                       <input
                         type="email"
                         placeholder="e.g. tariro@cellmed.co.zw"
@@ -947,13 +947,13 @@ export default function SysAdminDashboard({ token, onLogout, DashboardHeader, sh
                 <form className="panel" onSubmit={handleUploadCsv} style={{ background: 'var(--panel)', border: '1px solid var(--border)', padding: '32px', borderRadius: '18px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
                   <div style={{ border: '2px dashed var(--border)', borderRadius: '12px', padding: '40px 24px', textAlign: 'center', background: 'rgba(29,44,72,0.01)', position: 'relative' }}>
                     <div style={{ fontSize: '48px', marginBottom: '16px' }}>📁</div>
-                    <strong style={{ display: 'block', fontSize: '15px', color: 'var(--text)' }}>Choose CellMed CSV Data Roster</strong>
-                    <span style={{ fontSize: '12px', color: 'var(--muted)', display: 'block', marginTop: '6px' }}>Select a .csv data file exported from Excel</span>
+                    <strong style={{ display: 'block', fontSize: '15px', color: 'var(--text)' }}>Choose CellMed spreadsheet roster</strong>
+                    <span style={{ fontSize: '12px', color: 'var(--muted)', display: 'block', marginTop: '6px' }}>Select a .xlsx workbook or .csv export from Excel</span>
                     
                     <input
                       type="file"
                       id="csv-file-input"
-                      accept=".csv"
+                      accept=".xlsx,.csv"
                       required
                       onChange={(e) => setCsvFile(e.target.files[0])}
                       style={{ marginTop: '20px', cursor: 'pointer', fontSize: '13px' }}
@@ -994,20 +994,21 @@ export default function SysAdminDashboard({ token, onLogout, DashboardHeader, sh
 
                 <aside className="panel" style={{ background: 'var(--panel)', border: '1px solid var(--border)', padding: '24px', borderRadius: '18px' }}>
                   <h4 style={{ margin: '0 0 12px 0', fontSize: '16px' }}>Roster File Requirements</h4>
-                  <p style={{ color: 'var(--muted)', fontSize: '13px', lineHeight: '1.5' }}>
-                    The uploaded file must be in **Comma-Separated Values (CSV)** encoding. The header row is required and must contain precisely these columns (order does not matter):
+                    <p style={{ color: 'var(--muted)', fontSize: '13px', lineHeight: '1.5' }}>
+                    Upload a .xlsx spreadsheet or CSV export from Excel. The first four columns can be surname, name, gender, and membership number, and the remaining fields are optional.
                   </p>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '12px', fontSize: '12px', background: 'rgba(29,44,72,0.03)', padding: '12px', borderRadius: '8px', border: '1px solid var(--border)' }}>
-                    <code><strong>membership_number</strong> (e.g. CM-12345)</code>
-                    <code><strong>first_name</strong> (e.g. Sipho)</code>
-                    <code><strong>last_name</strong> (e.g. Ndlovu)</code>
+                    <code><strong>surname</strong> or <strong>last_name</strong> (required)</code>
+                    <code><strong>name</strong> or <strong>first_name</strong> (required)</code>
+                    <code><strong>gender</strong> (optional)</code>
+                    <code><strong>membership_number</strong> (required)</code>
                     <code><strong>insurer</strong> (e.g. Premium USD, ZGMF, ZIMPLATS)</code>
                     <code><strong>plan</strong> (e.g. Manuka, Silver, Diamond, Diaspora)</code>
                     <code><strong>id_number</strong> (e.g. 63-1234567-A-63)</code>
                     <code><strong>date_joined</strong> (e.g. 2024-01-15)</code>
                     <code><strong>date_of_birth</strong> (e.g. 1989-12-05)</code>
                     <code><strong>phone</strong> (e.g. +263 77 123 456)</code>
-                    <code><strong>email</strong> (e.g. sipho@cellmed.co.zw)</code>
+                    <code><strong>email</strong> (optional, e.g. sipho@cellmed.co.zw)</code>
                     <code><strong>address</strong> (e.g. Harare, Zimbabwe)</code>
                   </div>
 
@@ -1016,6 +1017,9 @@ export default function SysAdminDashboard({ token, onLogout, DashboardHeader, sh
                       <h5 style={{ margin: '0 0 6px 0', color: 'var(--success)' }}>Dataset Processed Details</h5>
                       <span style={{ display: 'block', fontSize: '12px', color: 'var(--muted)' }}>New records created: <strong>{uploadResult.created}</strong></span>
                       <span style={{ display: 'block', fontSize: '12px', color: 'var(--muted)' }}>Existing records updated: <strong>{uploadResult.updated}</strong></span>
+                      {typeof uploadResult.skipped === 'number' && (
+                        <span style={{ display: 'block', fontSize: '12px', color: 'var(--muted)' }}>Incomplete rows skipped: <strong>{uploadResult.skipped}</strong></span>
+                      )}
                     </div>
                   )}
                 </aside>
@@ -1581,7 +1585,7 @@ export default function SysAdminDashboard({ token, onLogout, DashboardHeader, sh
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', marginBottom: '4px' }}>Email Address</label>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', marginBottom: '4px' }}>Email Address (Optional)</label>
                   <input
                     type="email"
                     value={editMemberForm.email}

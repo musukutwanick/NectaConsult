@@ -1746,92 +1746,155 @@ class UploadCellMedMembersView(APIView):
         if not file:
             return Response({'detail': 'No file uploaded.'}, status=status.HTTP_400_BAD_REQUEST)
         
-        if not file.name.endswith('.csv'):
-            return Response({'detail': 'Please upload a CSV file (Excel CSV).'}, status=status.HTTP_400_BAD_REQUEST)
+        file_name = file.name.lower()
+        is_csv = file_name.endswith('.csv')
+        is_xlsx = file_name.endswith('.xlsx')
 
-        import csv
-        from io import StringIO
+        if not (is_csv or is_xlsx):
+            return Response({'detail': 'Please upload a .xlsx Excel file or .csv spreadsheet.'}, status=status.HTTP_400_BAD_REQUEST)
+
         from datetime import datetime
+        from io import BytesIO, StringIO
+
+        header_aliases = {
+            'surname': 'last_name',
+            'last_name': 'last_name',
+            'lastname': 'last_name',
+            'family_name': 'last_name',
+            'name': 'first_name',
+            'first_name': 'first_name',
+            'firstname': 'first_name',
+            'given_name': 'first_name',
+            'membership_no': 'membership_number',
+            'membership_number': 'membership_number',
+            'membershipnumber': 'membership_number',
+            'member_number': 'membership_number',
+            'memberno': 'membership_number',
+            'gender': 'gender',
+            'id_no': 'id_number',
+            'id_number': 'id_number',
+            'national_id': 'id_number',
+            'insurer': 'insurer',
+            'plan': 'plan',
+            'phone': 'phone',
+            'email': 'email',
+            'address': 'address',
+            'date_of_birth': 'date_of_birth',
+            'dob': 'date_of_birth',
+            'date_joined': 'date_joined',
+            'joined_date': 'date_joined',
+        }
+
+        def normalize_header(value):
+            return str(value or '').strip().lower().replace(' ', '_').replace('-', '_')
+
+        def cell_text(value):
+            if value is None:
+                return ''
+            if hasattr(value, 'strftime'):
+                try:
+                    return value.strftime('%Y-%m-%d')
+                except Exception:
+                    pass
+            if isinstance(value, float) and value.is_integer():
+                return str(int(value))
+            return str(value).strip()
+
+        def parse_date(value):
+            date_text = cell_text(value)
+            if not date_text:
+                return None
+            for fmt in ('%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y'):
+                try:
+                    return datetime.strptime(date_text, fmt).date()
+                except ValueError:
+                    continue
+            return None
 
         try:
-            decoded_file = file.read().decode('utf-8-sig', errors='ignore')
-            io_string = StringIO(decoded_file)
-            reader = csv.reader(io_string)
-            
-            header = next(reader, None)
-            if not header:
-                return Response({'detail': 'Empty CSV file.'}, status=status.HTTP_400_BAD_REQUEST)
-            
-            # Map headers to index
-            # Clean headers
-            header = [h.strip().lower().replace(' ', '_').replace('membership_number', 'membership_number').replace('member_number', 'membership_number') for h in header]
-            
-            required_headers = ['membership_number', 'first_name', 'last_name']
-            for req in required_headers:
-                if req not in header:
-                    return Response({'detail': f'Missing required CSV column: "{req}". Column headers must include membership_number, first_name, and last_name.'}, status=status.HTTP_400_BAD_REQUEST)
+            if is_xlsx:
+                try:
+                    from openpyxl import load_workbook
+                except ImportError:
+                    return Response({'detail': 'Excel support is not installed on the server. Please add openpyxl and try again.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-            mem_idx = header.index('membership_number')
-            fn_idx = header.index('first_name')
-            ln_idx = header.index('last_name')
-            dob_idx = header.index('date_of_birth') if 'date_of_birth' in header else -1
-            insurer_idx = header.index('insurer') if 'insurer' in header else -1
-            plan_idx = header.index('plan') if 'plan' in header else -1
-            id_idx = header.index('id_number') if 'id_number' in header else (header.index('national_id') if 'national_id' in header else -1)
-            joined_idx = header.index('date_joined') if 'date_joined' in header else (header.index('joined_date') if 'joined_date' in header else -1)
-            phone_idx = header.index('phone') if 'phone' in header else -1
-            email_idx = header.index('email') if 'email' in header else -1
-            addr_idx = header.index('address') if 'address' in header else -1
+                workbook = load_workbook(filename=BytesIO(file.read()), data_only=True, read_only=True)
+                sheet = workbook.active
+                rows = list(sheet.iter_rows(values_only=True))
+            else:
+                import csv
+
+                decoded_file = file.read().decode('utf-8-sig', errors='ignore')
+                io_string = StringIO(decoded_file)
+                rows = list(csv.reader(io_string))
+
+            if not rows:
+                return Response({'detail': 'The uploaded spreadsheet is empty.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            first_row = rows[0]
+            normalized_first_row = [normalize_header(value) for value in first_row]
+            has_headers = any(value in header_aliases for value in normalized_first_row)
+
+            if has_headers:
+                column_map = {}
+                for idx, column_name in enumerate(normalized_first_row):
+                    mapped_key = header_aliases.get(column_name)
+                    if mapped_key and mapped_key not in column_map:
+                        column_map[mapped_key] = idx
+                data_rows = rows[1:]
+            else:
+                column_map = {
+                    'last_name': 0,
+                    'first_name': 1,
+                    'gender': 2,
+                    'membership_number': 3,
+                    'id_number': 4,
+                    'insurer': 5,
+                    'plan': 6,
+                    'phone': 7,
+                    'email': 8,
+                    'address': 9,
+                    'date_joined': 10,
+                    'date_of_birth': 11,
+                }
+                data_rows = rows
+
+            if 'membership_number' not in column_map or 'first_name' not in column_map or 'last_name' not in column_map:
+                return Response({
+                    'detail': 'The spreadsheet must include surname, name, and membership number columns. Other fields are optional.'
+                }, status=status.HTTP_400_BAD_REQUEST)
 
             created_count = 0
             updated_count = 0
+            skipped_count = 0
 
             with transaction.atomic():
-                for row in reader:
-                    if not row or len(row) <= max(mem_idx, fn_idx, ln_idx):
+                for row in data_rows:
+                    if not row:
                         continue
-                    
-                    mem_num = row[mem_idx].strip().upper()
-                    if not mem_num:
+
+                    surname = cell_text(row[column_map['last_name']]) if column_map['last_name'] < len(row) else ''
+                    given_name = cell_text(row[column_map['first_name']]) if column_map['first_name'] < len(row) else ''
+                    mem_num = cell_text(row[column_map['membership_number']]) if column_map['membership_number'] < len(row) else ''
+
+                    if not surname or not given_name or not mem_num:
+                        skipped_count += 1
                         continue
-                    
-                    first_name = row[fn_idx].strip()
-                    last_name = row[ln_idx].strip()
-                    
-                    dob = None
-                    if dob_idx != -1 and dob_idx < len(row):
-                        dob_str = row[dob_idx].strip()
-                        if dob_str:
-                            for fmt in ('%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y'):
-                                try:
-                                    dob = datetime.strptime(dob_str, fmt).date()
-                                    break
-                                except ValueError:
-                                    pass
 
-                    date_joined = None
-                    if joined_idx != -1 and joined_idx < len(row):
-                        dj_str = row[joined_idx].strip()
-                        if dj_str:
-                            for fmt in ('%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y'):
-                                try:
-                                    date_joined = datetime.strptime(dj_str, fmt).date()
-                                    break
-                                except ValueError:
-                                    pass
+                    insurer = cell_text(row[column_map['insurer']]) if column_map.get('insurer', -1) != -1 and column_map['insurer'] < len(row) else ''
+                    plan = cell_text(row[column_map['plan']]) if column_map.get('plan', -1) != -1 and column_map['plan'] < len(row) else ''
+                    id_number = cell_text(row[column_map['id_number']]) if column_map.get('id_number', -1) != -1 and column_map['id_number'] < len(row) else ''
+                    phone = cell_text(row[column_map['phone']]) if column_map.get('phone', -1) != -1 and column_map['phone'] < len(row) else ''
+                    email = cell_text(row[column_map['email']]) if column_map.get('email', -1) != -1 and column_map['email'] < len(row) else ''
+                    address = cell_text(row[column_map['address']]) if column_map.get('address', -1) != -1 and column_map['address'] < len(row) else ''
+                    dob = parse_date(row[column_map['date_of_birth']]) if column_map.get('date_of_birth', -1) != -1 and column_map['date_of_birth'] < len(row) else None
+                    date_joined = parse_date(row[column_map['date_joined']]) if column_map.get('date_joined', -1) != -1 and column_map['date_joined'] < len(row) else None
 
-                    insurer = row[insurer_idx].strip() if insurer_idx != -1 and insurer_idx < len(row) else ''
-                    plan = row[plan_idx].strip() if plan_idx != -1 and plan_idx < len(row) else ''
-                    id_number = row[id_idx].strip() if id_idx != -1 and id_idx < len(row) else ''
-                    phone = row[phone_idx].strip() if phone_idx != -1 and phone_idx < len(row) else ''
-                    email = row[email_idx].strip() if email_idx != -1 and email_idx < len(row) else ''
-                    address = row[addr_idx].strip() if addr_idx != -1 and addr_idx < len(row) else ''
-
-                    member, created = CellMedMember.objects.update_or_create(
-                        membership_number=mem_num,
+                    _, created = CellMedMember.objects.update_or_create(
+                        membership_number=mem_num.upper(),
                         defaults={
-                            'first_name': first_name,
-                            'last_name': last_name,
+                            'first_name': given_name,
+                            'last_name': surname,
                             'date_of_birth': dob,
                             'insurer': insurer,
                             'plan': plan,
@@ -1839,7 +1902,7 @@ class UploadCellMedMembersView(APIView):
                             'date_joined': date_joined,
                             'phone': phone,
                             'email': email,
-                            'address': address
+                            'address': address,
                         }
                     )
 
@@ -1847,20 +1910,21 @@ class UploadCellMedMembersView(APIView):
                         created_count += 1
                     else:
                         updated_count += 1
-            
+
             AuditTrail.objects.create(
                 user=request.user,
                 action="Member Data Upload",
-                details=f"Uploaded CSV member data. Created: {created_count}, Updated: {updated_count}"
+                details=f"Uploaded spreadsheet member data. Created: {created_count}, Updated: {updated_count}, Skipped: {skipped_count}"
             )
 
             return Response({
-                'detail': f'Success! CellMed records processed. Created {created_count} new and updated {updated_count} existing members.',
+                'detail': f'Success! CellMed records processed. Created {created_count} new, updated {updated_count} existing, skipped {skipped_count} incomplete rows.',
                 'created': created_count,
-                'updated': updated_count
+                'updated': updated_count,
+                'skipped': skipped_count,
             })
         except Exception as e:
-            return Response({'detail': f'Error parsing CSV file: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({'detail': f'Error parsing spreadsheet file: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class ForceChangePasswordView(APIView):
