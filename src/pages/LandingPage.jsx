@@ -245,12 +245,12 @@ export default function LandingPage({ onGetStarted, onLogin }) {
       </section>
 
       {/* ===== CONFIDENTIALITY BANNER ===== */}
-      <div style={{ padding: '0 32px', marginBottom: '40px' }}>
+      <div style={{ padding: '0 32px', marginBottom: '24px' }}>
         <div style={{
           background: 'rgba(26, 128, 199, 0.04)',
           border: '1px solid rgba(26, 128, 199, 0.14)',
           borderRadius: '18px',
-          padding: '18px 24px',
+          padding: '16px 22px',
           display: 'flex',
           alignItems: 'center',
           gap: '16px',
@@ -276,8 +276,8 @@ export default function LandingPage({ onGetStarted, onLogin }) {
       </div>
 
       {/* ===== BOTTOM CURVED WAVE GRAPHIC BANNER ===== */}
-      <div style={{ width: '100%', marginTop: '24px', position: 'relative', overflow: 'hidden', lineHeight: 0 }}>
-        <div style={{ position: 'relative', width: '100%', height: '56px' }}>
+      <div style={{ width: '100%', marginTop: '8px', position: 'relative', overflow: 'hidden', lineHeight: 0 }}>
+        <div style={{ position: 'relative', width: '100%', height: '44px' }}>
           {/* Amber Accent Wave */}
           <svg viewBox="0 0 1440 60" fill="none" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
             <path d="M0,18 Q360,55 720,22 T1440,30 L1440,60 L0,60 Z" fill="#ffaa2b" />

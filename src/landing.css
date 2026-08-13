@@ -108,7 +108,7 @@
 /* ── HERO ────────────────────────────────────────────────── */
 .lp-hero {
   background: linear-gradient(160deg, #dbeeff 0%, #e8f5ff 40%, #cce7ff 100%);
-  padding: 72px 32px 80px;
+  padding: 64px 32px 68px;
   overflow: hidden;
 }
 
@@ -282,7 +282,7 @@
 }
 
 .lp-section-sub {
-  margin: 0 auto 44px;
+  margin: 0 auto 36px;
   max-width: 540px;
   font-size: 0.98rem;
   color: #5a6a85;
@@ -292,7 +292,7 @@
 /* ── FEATURES ────────────────────────────────────────────── */
 .lp-features {
   background: #fff;
-  padding: 84px 32px;
+  padding: 72px 32px;
 }
 
 .lp-features-grid {
@@ -350,7 +350,7 @@
 /* ── HOW IT WORKS ────────────────────────────────────────── */
 .lp-how {
   background: linear-gradient(160deg, #f4f9ff 0%, #eaf4ff 100%);
-  padding: 84px 32px;
+  padding: 72px 32px;
 }
 
 .lp-steps-grid {
@@ -416,7 +416,7 @@
 /* ── CTA ─────────────────────────────────────────────────── */
 .lp-cta {
   background: #fff;
-  padding: 60px 32px 80px;
+  padding: 48px 32px 56px;
 }
 
 .lp-cta-box {
@@ -426,7 +426,7 @@
   margin: 0 auto;
   background: linear-gradient(135deg, #1a80c7 0%, #1260a0 100%);
   border-radius: 24px;
-  padding: 60px 48px;
+  padding: 52px 44px;
   text-align: center;
   box-shadow: 0 24px 70px rgba(18, 96, 160, 0.3);
 }
@@ -518,7 +518,7 @@
 /* ── FOOTER ──────────────────────────────────────────────── */
 .lp-footer {
   background: #0d1f3c;
-  padding: 24px 32px;
+  padding: 20px 32px;
 }
 
 .lp-footer-inner {
@@ -554,16 +554,16 @@
   }
 
   .lp-hero {
-    padding: 56px 24px 60px;
+    padding: 50px 24px 54px;
   }
 
   .lp-features,
   .lp-how {
-    padding: 60px 24px;
+    padding: 54px 24px;
   }
 
   .lp-cta {
-    padding: 48px 24px 64px;
+    padding: 40px 24px 48px;
   }
 
   .lp-hero-inner {
@@ -584,26 +584,26 @@
   }
 
   .lp-section-sub {
-    margin-bottom: 34px;
+    margin-bottom: 28px;
   }
 
   .lp-cta-box {
-    padding: 44px 32px;
+    padding: 40px 32px;
   }
 }
 
 @media (max-width: 1440px) and (min-width: 1025px) {
   .lp-hero {
-    padding: 58px 32px 64px;
+    padding: 52px 32px 56px;
   }
 
   .lp-features,
   .lp-how {
-    padding: 64px 32px;
+    padding: 56px 32px;
   }
 
   .lp-cta {
-    padding: 52px 32px 72px;
+    padding: 44px 32px 52px;
   }
 
   .lp-hero-inner {
@@ -615,7 +615,7 @@
   }
 
   .lp-section-sub {
-    margin-bottom: 36px;
+    margin-bottom: 30px;
   }
 
   .lp-features-grid {
@@ -635,7 +635,7 @@
   }
 
   .lp-cta-box {
-    padding: 48px 40px;
+    padding: 42px 40px;
   }
 }
 
@@ -676,4 +676,35 @@
   .lp-features-grid { grid-template-columns: 1fr; }
   .lp-steps-grid { grid-template-columns: 1fr; }
   .lp-footer-inner { flex-direction: column; text-align: center; }
+}
+
+@media (max-height: 920px) {
+  .lp-hero {
+    padding-top: 48px;
+    padding-bottom: 52px;
+  }
+
+  .lp-features,
+  .lp-how {
+    padding-top: 56px;
+    padding-bottom: 56px;
+  }
+
+  .lp-cta {
+    padding-top: 40px;
+    padding-bottom: 44px;
+  }
+
+  .lp-section-sub {
+    margin-bottom: 28px;
+  }
+
+  .lp-cta-box {
+    padding: 38px 40px;
+  }
+
+  .lp-footer {
+    padding-top: 16px;
+    padding-bottom: 16px;
+  }
 }
