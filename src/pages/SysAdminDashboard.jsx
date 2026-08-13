@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../api';
 
 const sysadminNavigation = [
@@ -91,6 +91,8 @@ export default function SysAdminDashboard({ token, onLogout, DashboardHeader, sh
 
   const [csvFile, setCsvFile] = useState(null);
   const [uploadResult, setUploadResult] = useState(null);
+  const [isCsvDragging, setIsCsvDragging] = useState(false);
+  const csvFileInputRef = useRef(null);
 
 
   // Search/Filters
@@ -378,6 +380,32 @@ export default function SysAdminDashboard({ token, onLogout, DashboardHeader, sh
       setError(err.message);
     } finally {
       setLoading(false);
+    }
+  }
+
+  function handleCsvFile(file) {
+    if (!file) return;
+    setCsvFile(file);
+    setUploadResult(null);
+    setError('');
+    setSuccessMsg('');
+  }
+
+  function handleCsvInputChange(e) {
+    handleCsvFile(e.target.files && e.target.files[0]);
+  }
+
+  function handleCsvDrop(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsCsvDragging(false);
+    handleCsvFile(e.dataTransfer.files && e.dataTransfer.files[0]);
+  }
+
+  function clearCsvSelection() {
+    setCsvFile(null);
+    if (csvFileInputRef.current) {
+      csvFileInputRef.current.value = '';
     }
   }
 
@@ -945,7 +973,26 @@ export default function SysAdminDashboard({ token, onLogout, DashboardHeader, sh
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '24px' }}>
                 <form className="panel" onSubmit={handleUploadCsv} style={{ background: 'var(--panel)', border: '1px solid var(--border)', padding: '32px', borderRadius: '18px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                  <div style={{ border: '2px dashed var(--border)', borderRadius: '12px', padding: '40px 24px', textAlign: 'center', background: 'rgba(29,44,72,0.01)', position: 'relative' }}>
+                  <div
+                    onDragEnter={() => setIsCsvDragging(true)}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setIsCsvDragging(true);
+                    }}
+                    onDragLeave={() => setIsCsvDragging(false)}
+                    onDrop={handleCsvDrop}
+                    onClick={() => csvFileInputRef.current && csvFileInputRef.current.click()}
+                    style={{
+                      border: `2px dashed ${isCsvDragging ? 'var(--accent)' : 'var(--border)'}`,
+                      borderRadius: '12px',
+                      padding: '40px 24px',
+                      textAlign: 'center',
+                      background: isCsvDragging ? 'rgba(245, 158, 11, 0.08)' : 'rgba(29,44,72,0.01)',
+                      position: 'relative',
+                      cursor: 'pointer',
+                      transition: 'all 0.18s ease'
+                    }}
+                  >
                     <div style={{ fontSize: '48px', marginBottom: '16px' }}>📁</div>
                     <strong style={{ display: 'block', fontSize: '15px', color: 'var(--text)' }}>Choose CellMed spreadsheet roster</strong>
                     <span style={{ fontSize: '12px', color: 'var(--muted)', display: 'block', marginTop: '6px' }}>Select a .xlsx workbook or .csv export from Excel</span>
@@ -953,11 +1000,20 @@ export default function SysAdminDashboard({ token, onLogout, DashboardHeader, sh
                     <input
                       type="file"
                       id="csv-file-input"
+                      ref={csvFileInputRef}
                       accept=".xlsx,.csv"
                       required
-                      onChange={(e) => setCsvFile(e.target.files[0])}
+                      onChange={handleCsvInputChange}
+                      onClick={(e) => { e.stopPropagation(); }}
                       style={{ marginTop: '20px', cursor: 'pointer', fontSize: '13px' }}
                     />
+
+                    {csvFile && (
+                      <div style={{ marginTop: '16px', display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '8px 12px', borderRadius: '9999px', background: 'rgba(245, 158, 11, 0.12)', color: 'var(--text)', fontSize: '12px', fontWeight: '600' }}>
+                        <i className="fa-solid fa-file-arrow-up" style={{ color: 'var(--accent)' }}></i>
+                        <span>{csvFile.name}</span>
+                      </div>
+                    )}
                   </div>
 
                   <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
@@ -987,7 +1043,7 @@ export default function SysAdminDashboard({ token, onLogout, DashboardHeader, sh
 
 
                     {csvFile && (
-                      <button type="button" className="secondary-button" style={{ height: '36px', borderRadius: '8px' }} onClick={() => { setCsvFile(null); document.getElementById('csv-file-input').value = ''; }}>Cancel</button>
+                      <button type="button" className="secondary-button" style={{ height: '36px', borderRadius: '8px' }} onClick={clearCsvSelection}>Cancel</button>
                     )}
                   </div>
                 </form>
